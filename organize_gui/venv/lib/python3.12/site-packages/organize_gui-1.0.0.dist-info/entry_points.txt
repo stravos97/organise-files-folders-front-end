@@ -1,0 +1,2 @@
+[console_scripts]
+organize-gui = organize_gui.app:main

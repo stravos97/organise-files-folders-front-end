@@ -1,0 +1,42 @@
+Metadata-Version: 2.1
+Name: mdfind-wrapper
+Version: 0.1.5
+Summary: A python library that wraps the mdfind.
+Home-page: https://github.com/dmkskn/mdfind-wrapper
+Author: Dima Koskin
+Author-email: dmksknn@gmail.com
+License: Unlicense
+Keywords: macos,mdfind,spotlight
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Operating System :: MacOS
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+
+# `mdfind`
+
+A python library that wraps the **mdfind**.
+
+- No dependencies except ones that in the python standart library
+- Mypy checked ✨
+- Fully tested
+
+## Installation
+
+```bash
+$ pip install mdfind-wrapper
+```
+
+## Usage
+
+```python
+import mdfind # not mdfind-wrapper
+
+
+QUERY = "kind:image"
+
+images = mdfind.query(QUERY)
+n_imgs = mdfind.count(QUERY)
+```
+

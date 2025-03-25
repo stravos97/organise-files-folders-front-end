@@ -1,33 +1,39 @@
 """
-Preview and Run panel for the File Organization System.
+Enhanced Preview and Run panel for the File Organization System.
 
-This module defines the UI components for simulating and running the
-file organization process, as well as scheduling automated runs.
+This implementation provides a complete interface for simulating and running
+the file organization process, with real-time feedback and progress tracking.
 """
 
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 import queue
 import datetime
-
-from core.organize_runner import OrganizeRunner
+import subprocess
+import tempfile
+import yaml
+import re
 
 class PreviewPanel(ttk.Frame):
-    """Panel for previewing and running the organization process."""
+    """Enhanced panel for previewing and running the organization process."""
     
-    def __init__(self, parent):
+    def __init__(self, parent, organize_runner=None):
         """Initialize the preview panel."""
         super().__init__(parent)
         
-        # Create the organize runner
-        self.organize_runner = OrganizeRunner()
+        # Initialize the organize runner
+        self.organize_runner = organize_runner
+        
+        # Process state
+        self.is_running = False
         
         # Queue for thread communication
         self.queue = queue.Queue()
         
-        # Current process state
-        self.is_running = False
+        # Result tracking
+        self.current_results = []
         
         # Create the UI components
         self._create_widgets()
@@ -59,13 +65,42 @@ class PreviewPanel(ttk.Frame):
         )
         run_button.pack(side=tk.LEFT, padx=5, pady=5)
         
-        schedule_button = ttk.Button(
-            actions_frame, 
-            text="Schedule...", 
-            command=self._show_schedule_dialog,
-            width=15
+        # Options frame
+        options_frame = ttk.LabelFrame(main_frame, text="Options", padding=(10, 5))
+        options_frame.pack(fill=tk.X, pady=5)
+        
+        # Verbose output option
+        self.verbose_var = tk.BooleanVar(value=True)
+        verbose_check = ttk.Checkbutton(
+            options_frame,
+            text="Verbose Output",
+            variable=self.verbose_var
         )
-        schedule_button.pack(side=tk.RIGHT, padx=5, pady=5)
+        verbose_check.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        # Custom config option
+        self.custom_config_var = tk.BooleanVar(value=False)
+        custom_config_check = ttk.Checkbutton(
+            options_frame,
+            text="Use Custom Config File",
+            variable=self.custom_config_var,
+            command=self._toggle_custom_config
+        )
+        custom_config_check.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        # Custom config path
+        self.custom_config_frame = ttk.Frame(options_frame)
+        self.custom_config_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        
+        self.custom_config_var = tk.StringVar()
+        self.custom_config_entry = ttk.Entry(self.custom_config_frame, textvariable=self.custom_config_var, width=30)
+        self.custom_config_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        self.custom_config_button = ttk.Button(self.custom_config_frame, text="Browse...", command=self._browse_config)
+        self.custom_config_button.pack(side=tk.LEFT)
+        
+        # Hide custom config path initially
+        self.custom_config_frame.pack_forget()
         
         # Progress frame
         progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding=(10, 5))
@@ -91,24 +126,126 @@ class PreviewPanel(ttk.Frame):
         output_frame = ttk.LabelFrame(main_frame, text="Output", padding=(10, 5))
         output_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        # Output text with scrollbar
-        output_scroll = ttk.Scrollbar(output_frame)
-        output_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # Output text with scrollbars
+        output_frame_inner = ttk.Frame(output_frame)
+        output_frame_inner.pack(fill=tk.BOTH, expand=True)
+        
+        y_scrollbar = ttk.Scrollbar(output_frame_inner)
+        y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        x_scrollbar = ttk.Scrollbar(output_frame_inner, orient=tk.HORIZONTAL)
+        x_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         
         self.output_text = tk.Text(
-            output_frame, 
-            wrap=tk.WORD, 
-            yscrollcommand=output_scroll.set,
+            output_frame_inner, 
+            wrap=tk.NONE, 
+            yscrollcommand=y_scrollbar.set,
+            xscrollcommand=x_scrollbar.set,
             height=20
         )
         self.output_text.pack(fill=tk.BOTH, expand=True)
-        output_scroll.config(command=self.output_text.yview)
+        
+        y_scrollbar.config(command=self.output_text.yview)
+        x_scrollbar.config(command=self.output_text.xview)
         
         # Tag configuration for colored output
-        self.output_text.tag_config("info", foreground="black")
-        self.output_text.tag_config("success", foreground="green")
-        self.output_text.tag_config("warning", foreground="orange")
-        self.output_text.tag_config("error", foreground="red")
+        self.output_text.tag_config("info", foreground="#000000")  # Black
+        self.output_text.tag_config("success", foreground="#008800")  # Green
+        self.output_text.tag_config("warning", foreground="#FF8800")  # Orange
+        self.output_text.tag_config("error", foreground="#FF0000")  # Red
+        self.output_text.tag_config("move", foreground="#0000FF")  # Blue
+        self.output_text.tag_config("echo", foreground="#888888")  # Gray
+        self.output_text.tag_config("heading", font=("", 10, "bold"))  # Bold
+        
+        # Button frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=5)
+        
+        clear_button = ttk.Button(
+            button_frame, 
+            text="Clear Output", 
+            command=self._clear_output
+        )
+        clear_button.pack(side=tk.LEFT, padx=5)
+        
+        stop_button = ttk.Button(
+            button_frame, 
+            text="Stop Process", 
+            command=self._stop_process
+        )
+        stop_button.pack(side=tk.LEFT, padx=5)
+        
+        save_output_button = ttk.Button(
+            button_frame, 
+            text="Save Output", 
+            command=self._save_output
+        )
+        save_output_button.pack(side=tk.RIGHT, padx=5)
+    
+    def _toggle_custom_config(self):
+        """Toggle the custom config file entry."""
+        if self.custom_config_var.get():
+            self.custom_config_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        else:
+            self.custom_config_frame.pack_forget()
+    
+    def _browse_config(self):
+        """Browse for a custom config file."""
+        filetypes = [("YAML files", "*.yaml"), ("All files", "*.*")]
+        filename = tk.filedialog.askopenfilename(
+            title="Select Configuration File", 
+            filetypes=filetypes
+        )
+        if filename:
+            self.custom_config_var.set(filename)
+    
+    def _clear_output(self):
+        """Clear the output text."""
+        self.output_text.config(state=tk.NORMAL)
+        self.output_text.delete("1.0", tk.END)
+        self.output_text.config(state=tk.DISABLED)
+        
+        # Reset progress
+        self.progress_var.set(0)
+        self.status_var.set("Ready")
+    
+    def _stop_process(self):
+        """Stop the current process."""
+        if not self.is_running:
+            return
+        
+        # Confirm stop
+        if not messagebox.askyesno("Stop Process", 
+                                  "Are you sure you want to stop the current process?"):
+            return
+        
+        # Set state to not running
+        self.is_running = False
+        
+        # Update status
+        self.status_var.set("Stopping...")
+        
+        # Add message to output
+        self._add_output("Process manually stopped by user.", "warning")
+        
+        # The process will check self.is_running and stop on the next iteration
+    
+    def _save_output(self):
+        """Save the output text to a file."""
+        filetypes = [("Text files", "*.txt"), ("All files", "*.*")]
+        filename = tk.filedialog.asksaveasfilename(
+            title="Save Output", 
+            filetypes=filetypes,
+            defaultextension=".txt"
+        )
+        if filename:
+            try:
+                output_text = self.output_text.get("1.0", tk.END)
+                with open(filename, "w") as f:
+                    f.write(output_text)
+                messagebox.showinfo("Save Output", f"Output saved to {filename}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save output: {str(e)}")
     
     def _update_progress(self, value, status_text=None):
         """Update the progress bar and status text."""
@@ -150,7 +287,7 @@ class PreviewPanel(ttk.Frame):
                 elif message['type'] == 'output':
                     self._add_output(message['text'], message.get('tag', 'info'))
                 elif message['type'] == 'complete':
-                    self._process_complete(message.get('success', True), message.get('message'))
+                    self._process_complete(message.get('success', True), message.get('message'), message.get('results', []))
                 
                 self.queue.task_done()
         except queue.Empty:
@@ -158,7 +295,7 @@ class PreviewPanel(ttk.Frame):
             if self.is_running:
                 self.after(100, self._process_queue)
     
-    def _process_complete(self, success, message=None):
+    def _process_complete(self, success, message=None, results=None):
         """Handle process completion."""
         self.is_running = False
         
@@ -168,6 +305,10 @@ class PreviewPanel(ttk.Frame):
         else:
             self._update_progress(0, "Failed")
             self._add_output(message or "Process failed.", "error")
+        
+        # Store results
+        if results:
+            self.current_results = results
         
         # Notify that results are available
         self.event_generate("<<ProcessComplete>>", when="tail")
@@ -204,28 +345,36 @@ class PreviewPanel(ttk.Frame):
                 self.queue.put({
                     'type': 'output',
                     'text': "Starting simulation...",
-                    'tag': 'info'
+                    'tag': 'heading'
                 })
             else:
                 self.queue.put({
                     'type': 'output',
                     'text': "Starting organization process...",
-                    'tag': 'info'
+                    'tag': 'heading'
                 })
             
-            # Run the process
-            result = self.organize_runner.run(
-                simulation=simulation,
-                progress_callback=self._thread_progress_callback,
-                output_callback=self._thread_output_callback
-            )
-            
-            # Process complete
-            self.queue.put({
-                'type': 'complete',
-                'success': result['success'],
-                'message': result.get('message')
-            })
+            # Check if we should use the organize runner
+            if self.organize_runner:
+                # Run using the organize runner
+                result = self.organize_runner.run(
+                    simulation=simulation,
+                    progress_callback=self._thread_progress_callback,
+                    output_callback=self._thread_output_callback,
+                    config_path=self.custom_config_var.get() if self.custom_config_var.get() else None,
+                    verbose=self.verbose_var.get()
+                )
+                
+                # Process complete
+                self.queue.put({
+                    'type': 'complete',
+                    'success': result['success'],
+                    'message': result.get('message'),
+                    'results': result.get('results', [])
+                })
+            else:
+                # Run using direct subprocess call
+                self._run_organize_command(simulation)
         except Exception as e:
             # Handle exceptions
             self.queue.put({
@@ -238,6 +387,250 @@ class PreviewPanel(ttk.Frame):
                 'success': False,
                 'message': "Process failed due to an error."
             })
+    
+    def _run_organize_command(self, simulation):
+        """Run the organize command using subprocess."""
+        try:
+            # Get the configuration from the parent application
+            config = self._get_current_config()
+            
+            if not config:
+                self.queue.put({
+                    'type': 'output',
+                    'text': "No configuration available.",
+                    'tag': 'error'
+                })
+                self.queue.put({
+                    'type': 'complete',
+                    'success': False,
+                    'message': "No configuration available."
+                })
+                return
+            
+            # Create a temporary config file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
+                temp_path = temp_file.name
+                yaml.dump(config, temp_file, default_flow_style=False, sort_keys=False)
+            
+            try:
+                # Prepare command
+                if os.name == 'nt':  # Windows
+                    cmd = ['organize.exe']
+                else:
+                    cmd = ['organize']
+                
+                # Add simulation/run mode
+                if simulation:
+                    cmd.append('sim')
+                else:
+                    cmd.append('run')
+                
+                # Add config file
+                cmd.append(temp_path)
+                
+                # Add verbose flag if requested
+                if self.verbose_var.get():
+                    cmd.append('--verbose')
+                
+                # Log the command
+                self.queue.put({
+                    'type': 'output',
+                    'text': f"Running command: {' '.join(cmd)}",
+                    'tag': 'info'
+                })
+                
+                # Start the process
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    universal_newlines=True,
+                    bufsize=1
+                )
+                
+                # Process output
+                results = []
+                file_pattern = re.compile(r'^\s*[✓✗]\s+(.*)')
+                move_pattern = re.compile(r'.*Moving\s+"(.*)"\s+to\s+"(.*)"')
+                error_pattern = re.compile(r'^\s*Error:.*', re.IGNORECASE)
+                
+                total_lines = 0
+                processed_files = 0
+                
+                for line in iter(process.stdout.readline, ''):
+                    if not self.is_running:
+                        # Process manually stopped
+                        process.terminate()
+                        break
+                    
+                    total_lines += 1
+                    
+                    # Extract information from the line
+                    file_match = file_pattern.match(line)
+                    move_match = move_pattern.match(line)
+                    error_match = error_pattern.match(line)
+                    
+                    if file_match:
+                        processed_files += 1
+                        file_path = file_match.group(1)
+                        
+                        # Add to output with appropriate tag
+                        self.queue.put({
+                            'type': 'output',
+                            'text': f"Processing: {file_path}",
+                            'tag': 'info'
+                        })
+                        
+                        # Update progress approximation
+                        progress = min(processed_files / max(1, processed_files + 100) * 100, 95)
+                        self.queue.put({
+                            'type': 'progress',
+                            'value': progress,
+                            'status': f"Processed {processed_files} files..."
+                        })
+                    
+                    elif move_match:
+                        source = move_match.group(1)
+                        dest = move_match.group(2)
+                        
+                        # Add to results
+                        result = {
+                            'source': source,
+                            'destination': dest,
+                            'status': "Moved" if not simulation else "Would move",
+                            'rule': "Unknown"  # We don't get rule info from command line output
+                        }
+                        results.append(result)
+                        
+                        # Add to output
+                        self.queue.put({
+                            'type': 'output',
+                            'text': f"{'Would move' if simulation else 'Moving'}: {source} → {dest}",
+                            'tag': 'move'
+                        })
+                    
+                    elif error_match:
+                        # Add to output
+                        self.queue.put({
+                            'type': 'output',
+                            'text': line.strip(),
+                            'tag': 'error'
+                        })
+                    
+                    elif "Simulation mode" in line:
+                        # Heading for simulation
+                        self.queue.put({
+                            'type': 'output',
+                            'text': line.strip(),
+                            'tag': 'heading'
+                        })
+                    
+                    elif line.startswith("Rule "):
+                        # Rule heading
+                        self.queue.put({
+                            'type': 'output',
+                            'text': line.strip(),
+                            'tag': 'heading'
+                        })
+                    
+                    else:
+                        # Other output
+                        line = line.strip()
+                        if line:
+                            tag = 'info'
+                            if line.startswith("Found"):
+                                tag = 'echo'
+                            
+                            self.queue.put({
+                                'type': 'output',
+                                'text': line,
+                                'tag': tag
+                            })
+                
+                # Process any errors from stderr
+                for line in iter(process.stderr.readline, ''):
+                    if line.strip():
+                        self.queue.put({
+                            'type': 'output',
+                            'text': line.strip(),
+                            'tag': 'error'
+                        })
+                
+                # Check return code
+                if process.returncode is None:
+                    process.wait()
+                
+                if process.returncode == 0:
+                    message = "Simulation completed successfully." if simulation else "Organization completed successfully."
+                    self.queue.put({
+                        'type': 'complete',
+                        'success': True,
+                        'message': message,
+                        'results': results
+                    })
+                else:
+                    self.queue.put({
+                        'type': 'complete',
+                        'success': False,
+                        'message': f"Process failed with return code {process.returncode}",
+                        'results': results
+                    })
+            
+            finally:
+                # Clean up the temporary file
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+        
+        except Exception as e:
+            # Handle exceptions
+            self.queue.put({
+                'type': 'output',
+                'text': f"Error: {str(e)}",
+                'tag': 'error'
+            })
+            self.queue.put({
+                'type': 'complete',
+                'success': False,
+                'message': "Process failed due to an error."
+            })
+    
+    def _get_current_config(self):
+        """Get the current configuration from the parent application."""
+        # Try to get config from ConfigPanel
+        try:
+            parent = self.winfo_parent()
+            parent_widget = self.nametowidget(parent)
+            
+            # If parent is notebook, get the current tab
+            if isinstance(parent_widget, ttk.Notebook):
+                root = parent_widget.winfo_toplevel()
+                
+                # Find ConfigPanel
+                for widget in root.winfo_children():
+                    if hasattr(widget, 'get_current_config'):
+                        return widget.get_current_config()
+            
+            # If using custom config, load it directly
+            if self.custom_config_var.get() and os.path.exists(self.custom_config_var.get()):
+                with open(self.custom_config_var.get(), 'r') as f:
+                    return yaml.safe_load(f)
+            
+            # Try message passing
+            self.event_generate("<<RequestConfig>>")
+            
+            # Default to empty config
+            return {'rules': []}
+            
+        except Exception as e:
+            self.queue.put({
+                'type': 'output',
+                'text': f"Error getting configuration: {str(e)}",
+                'tag': 'error'
+            })
+            return None
     
     def _thread_progress_callback(self, value, status=None):
         """Callback for progress updates from the thread."""
@@ -254,135 +647,6 @@ class PreviewPanel(ttk.Frame):
             'text': text,
             'tag': tag
         })
-    
-    def _show_schedule_dialog(self):
-        """Show the scheduling dialog."""
-        # Create a top-level window
-        dialog = tk.Toplevel(self)
-        dialog.title("Schedule Organization")
-        dialog.geometry("400x300")
-        dialog.transient(self)  # Make dialog modal
-        dialog.grab_set()
-        
-        # Main frame
-        main_frame = ttk.Frame(dialog, padding=(20, 10))
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Scheduling options
-        ttk.Label(main_frame, text="Schedule Type:").pack(anchor=tk.W, pady=(10, 5))
-        
-        schedule_var = tk.StringVar(value="daily")
-        schedule_frame = ttk.Frame(main_frame)
-        schedule_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Radiobutton(
-            schedule_frame, 
-            text="Daily", 
-            variable=schedule_var, 
-            value="daily"
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Radiobutton(
-            schedule_frame, 
-            text="Weekly", 
-            variable=schedule_var, 
-            value="weekly"
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Radiobutton(
-            schedule_frame, 
-            text="Monthly", 
-            variable=schedule_var, 
-            value="monthly"
-        ).pack(side=tk.LEFT)
-        
-        # Time selection
-        time_frame = ttk.Frame(main_frame)
-        time_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Label(time_frame, text="Run at:").pack(side=tk.LEFT)
-        
-        hour_var = tk.StringVar(value="02")
-        hour_combo = ttk.Combobox(
-            time_frame, 
-            textvariable=hour_var,
-            values=[f"{h:02d}" for h in range(24)],
-            width=3,
-            state="readonly"
-        )
-        hour_combo.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Label(time_frame, text=":").pack(side=tk.LEFT)
-        
-        minute_var = tk.StringVar(value="00")
-        minute_combo = ttk.Combobox(
-            time_frame, 
-            textvariable=minute_var,
-            values=[f"{m:02d}" for m in range(0, 60, 5)],
-            width=3,
-            state="readonly"
-        )
-        minute_combo.pack(side=tk.LEFT, padx=5)
-        
-        # Options
-        options_frame = ttk.LabelFrame(main_frame, text="Options", padding=(10, 5))
-        options_frame.pack(fill=tk.X, pady=10)
-        
-        simulation_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            options_frame,
-            text="Run in simulation mode (no actual changes)",
-            variable=simulation_var
-        ).pack(anchor=tk.W, pady=5)
-        
-        notify_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            options_frame,
-            text="Notify when complete",
-            variable=notify_var
-        ).pack(anchor=tk.W, pady=5)
-        
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=10)
-        
-        ttk.Button(
-            button_frame,
-            text="Cancel",
-            command=dialog.destroy,
-            width=10
-        ).pack(side=tk.RIGHT, padx=5)
-        
-        ttk.Button(
-            button_frame,
-            text="Schedule",
-            command=lambda: self._schedule_task(
-                schedule_var.get(),
-                f"{hour_var.get()}:{minute_var.get()}",
-                simulation_var.get(),
-                notify_var.get(),
-                dialog
-            ),
-            width=10
-        ).pack(side=tk.RIGHT, padx=5)
-    
-    def _schedule_task(self, schedule_type, time, simulation, notify, dialog):
-        """Schedule a task with the provided options."""
-        # In a real implementation, this would create a scheduled task
-        # using the system's scheduler (cron, Task Scheduler, etc.)
-        
-        # Close the dialog
-        dialog.destroy()
-        
-        # Display confirmation
-        message = f"Organization scheduled to run {schedule_type} at {time}."
-        if simulation:
-            message += " (Simulation mode)"
-        
-        messagebox.showinfo("Task Scheduled", message)
-        
-        # Add info to output
-        self._add_output(f"Scheduled: {message}", "info")
     
     # Public methods
     
@@ -409,3 +673,7 @@ class PreviewPanel(ttk.Frame):
             return
         
         self._run_process(simulation=False)
+    
+    def get_results(self):
+        """Get the current results."""
+        return self.current_results

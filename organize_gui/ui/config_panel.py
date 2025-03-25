@@ -25,6 +25,20 @@ class ConfigPanel(ttk.Frame):
         # Current configuration path
         self.current_config_path = None
         
+        # Set dark theme if available
+        try:
+            if os.name == 'nt':  # Windows
+                self.tk_setPalette(background='#2b2b2b', foreground='white')
+            else:  # macOS/Linux
+                self.configure(background='#2b2b2b')
+                for child in self.winfo_children():
+                    try:
+                        child.configure(background='#2b2b2b', foreground='white')
+                    except:
+                        pass
+        except:
+            pass  # Fallback to default theme if this fails
+        
         # Create the UI components
         self._create_widgets()
     
@@ -160,23 +174,29 @@ class ConfigPanel(ttk.Frame):
         yaml_scroll_x = ttk.Scrollbar(yaml_editor_frame, orient='horizontal')
         yaml_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
         
+        # YAML Editor fonts and colors
         self.yaml_editor = tk.Text(
             yaml_editor_frame, 
             wrap=tk.NONE,
             yscrollcommand=yaml_scroll_y.set,
             xscrollcommand=yaml_scroll_x.set,
             height=15,
-            font=("Courier", 10)
+            font=("Consolas", 10) if os.name == 'nt' else ("Menlo", 10),
+            bg="#2b2b2b",
+            fg="white",
+            insertbackground="white"
         )
         self.yaml_editor.pack(fill=tk.BOTH, expand=True)
         
         yaml_scroll_y.config(command=self.yaml_editor.yview)
         yaml_scroll_x.config(command=self.yaml_editor.xview)
         
-        # Add syntax highlighting for YAML (basic)
-        self.yaml_editor.tag_configure("key", foreground="blue")
-        self.yaml_editor.tag_configure("value", foreground="green")
-        self.yaml_editor.tag_configure("comment", foreground="gray")
+        # Better syntax highlighting
+        self.yaml_editor.tag_configure("key", foreground="#e6b422")  # Yellow
+        self.yaml_editor.tag_configure("value", foreground="#6a9955")  # Green
+        self.yaml_editor.tag_configure("comment", foreground="#777777")  # Gray
+        self.yaml_editor.tag_configure("brackets", foreground="#d4d4d4")  # Light gray
+        self.yaml_editor.tag_configure("string", foreground="#ce9178")  # Orange
         
         # Editor buttons
         editor_buttons = ttk.Frame(yaml_frame)
@@ -193,6 +213,10 @@ class ConfigPanel(ttk.Frame):
         # Initialize source directories list
         self.source_entries = []
         self._add_source_directory()
+        
+        # Set up custom styles
+        self._setup_styles()
+        self._style_buttons()
     
     def _reset_tree_view(self):
         """Reset the tree view with default structure."""
@@ -201,19 +225,19 @@ class ConfigPanel(ttk.Frame):
             self.tree.delete(item)
         
         # Add base structure
-        organized = self.tree.insert("", "end", text="Organized", open=True)
+        organized = self.tree.insert("", "end", text="Organized", open=True, tags=("folder", "organized"))
         
-        self.tree.insert(organized, "end", text="Documents", values=("Documents/",))
-        self.tree.insert(organized, "end", text="Media", values=("Media/",))
-        self.tree.insert(organized, "end", text="Development", values=("Development/",))
-        self.tree.insert(organized, "end", text="Archives", values=("Archives/",))
-        self.tree.insert(organized, "end", text="Applications", values=("Applications/",))
-        self.tree.insert(organized, "end", text="Other", values=("Other/",))
+        self.tree.insert(organized, "end", text="Documents", values=("Documents/",), tags=("folder",))
+        self.tree.insert(organized, "end", text="Media", values=("Media/",), tags=("folder",))
+        self.tree.insert(organized, "end", text="Development", values=("Development/",), tags=("folder",))
+        self.tree.insert(organized, "end", text="Archives", values=("Archives/",), tags=("folder",))
+        self.tree.insert(organized, "end", text="Applications", values=("Applications/",), tags=("folder",))
+        self.tree.insert(organized, "end", text="Other", values=("Other/",), tags=("folder",))
         
-        cleanup = self.tree.insert("", "end", text="Cleanup", open=True)
+        cleanup = self.tree.insert("", "end", text="Cleanup", open=True, tags=("folder", "cleanup"))
         
-        self.tree.insert(cleanup, "end", text="Temporary", values=("Temporary/",))
-        self.tree.insert(cleanup, "end", text="Duplicates", values=("Duplicates/",))
+        self.tree.insert(cleanup, "end", text="Temporary", values=("Temporary/",), tags=("folder",))
+        self.tree.insert(cleanup, "end", text="Duplicates", values=("Duplicates/",), tags=("folder",))
     
     def _add_source_directory(self):
         """Add a new source directory entry to the list."""
@@ -393,6 +417,49 @@ class ConfigPanel(ttk.Frame):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update paths: {str(e)}")
     
+    def _setup_styles(self):
+        """Set up custom styles for the UI."""
+        style = ttk.Style()
+        
+        # Configure the Treeview style
+        style.configure("Treeview", 
+                        background="#2b2b2b",
+                        foreground="white",
+                        fieldbackground="#2b2b2b",
+                        font=('Arial', 10))
+        
+        # Configure Treeview heading style
+        style.configure("Treeview.Heading", 
+                        background="#3c3f41",
+                        foreground="white",
+                        font=('Arial', 10, 'bold'))
+        
+        # Configure tag styles for the tree
+        self.tree.tag_configure("folder", foreground="#4e9bcd")
+        self.tree.tag_configure("organized", foreground="#92d050")
+        self.tree.tag_configure("cleanup", foreground="#ffcc00")
+    
+    def _style_buttons(self):
+        """Style buttons with a modern look."""
+        style = ttk.Style()
+        
+        # Configure button style
+        style.configure("TButton", 
+                        background="#3c3f41",
+                        foreground="white",
+                        font=('Arial', 10))
+        
+        # Configure label style
+        style.configure("TLabel", 
+                        background="#2b2b2b",
+                        foreground="white",
+                        font=('Arial', 10))
+        
+        # Configure entry style
+        style.configure("TEntry", 
+                        fieldbackground="#3c3f41",
+                        foreground="white")
+    
     def _update_tree_view(self):
         """Update the tree view with the current destination path."""
         # Clear existing items
@@ -407,34 +474,34 @@ class ConfigPanel(ttk.Frame):
             return
         
         # Create the main structure nodes with correct paths
-        organized = self.tree.insert("", "end", text="Organized", open=True)
-        cleanup = self.tree.insert("", "end", text="Cleanup", open=True)
+        organized = self.tree.insert("", "end", text="Organized", open=True, tags=("folder", "organized"))
+        cleanup = self.tree.insert("", "end", text="Cleanup", open=True, tags=("folder", "cleanup"))
         
         # Add organized subdirectories
         docs = self.tree.insert(organized, "end", text="Documents", 
-                          values=(os.path.join(dest_base, "Organized/Documents/"),))
+                          values=(os.path.join(dest_base, "Organized/Documents/"),), tags=("folder",))
         
         self.tree.insert(organized, "end", text="Media", 
-                   values=(os.path.join(dest_base, "Organized/Media/"),))
+                   values=(os.path.join(dest_base, "Organized/Media/"),), tags=("folder",))
         
         self.tree.insert(organized, "end", text="Development", 
-                   values=(os.path.join(dest_base, "Organized/Development/"),))
+                   values=(os.path.join(dest_base, "Organized/Development/"),), tags=("folder",))
         
         self.tree.insert(organized, "end", text="Archives", 
-                   values=(os.path.join(dest_base, "Organized/Archives/"),))
+                   values=(os.path.join(dest_base, "Organized/Archives/"),), tags=("folder",))
         
         self.tree.insert(organized, "end", text="Applications", 
-                   values=(os.path.join(dest_base, "Organized/Applications/"),))
+                   values=(os.path.join(dest_base, "Organized/Applications/"),), tags=("folder",))
         
         self.tree.insert(organized, "end", text="Other", 
-                   values=(os.path.join(dest_base, "Organized/Other/"),))
+                   values=(os.path.join(dest_base, "Organized/Other/"),), tags=("folder",))
         
         # Add cleanup subdirectories
         self.tree.insert(cleanup, "end", text="Temporary", 
-                   values=(os.path.join(dest_base, "Cleanup/Temporary/"),))
+                   values=(os.path.join(dest_base, "Cleanup/Temporary/"),), tags=("folder",))
         
         self.tree.insert(cleanup, "end", text="Duplicates", 
-                   values=(os.path.join(dest_base, "Cleanup/Duplicates/"),))
+                   values=(os.path.join(dest_base, "Cleanup/Duplicates/"),), tags=("folder",))
         
         # If we have a configuration loaded, check for additional paths
         config = self.get_current_config()
@@ -493,7 +560,7 @@ class ConfigPanel(ttk.Frame):
             if not found:
                 # Create the node if it doesn't exist
                 full_path = os.path.join(current_path, component) + '/'
-                current_id = self.tree.insert(current_id, "end", text=component, values=(full_path,))
+                current_id = self.tree.insert(current_id, "end", text=component, values=(full_path,), tags=("folder",))
     
     def _extract_relative_path(self, path):
         """Extract the relative part of a path after Organized/ or Cleanup/."""

@@ -21,6 +21,9 @@ from ui.preview_panel import PreviewPanel
 from ui.results_panel import ResultsPanel
 from core.config_manager import ConfigManager
 from core.organize_runner import OrganizeRunner
+from core import preset_manager # Import the new preset manager
+from ui.dialogs.about_dialog import AboutDialog # Import the new AboutDialog
+from ui.dialogs.schedule_dialog import ScheduleDialog # Import the new ScheduleDialog
 
 class MainWindow:
     """Enhanced main application window class."""
@@ -108,13 +111,13 @@ class MainWindow:
         
         # Presets menu
         self.presets_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.presets_menu.add_command(label="Load Default Organization", command=self.on_load_default_organization)
-        self.presets_menu.add_command(label="Load Photo Organization", command=self.on_load_photo_organization)
-        self.presets_menu.add_command(label="Load Music Organization", command=self.on_load_music_organization)
-        self.presets_menu.add_command(label="Load Document Organization", command=self.on_load_document_organization)
-        self.presets_menu.add_command(label="Load Cleanup Rules", command=self.on_load_cleanup_rules)
+        self.presets_menu.add_command(label="Load Default Organization", command=lambda: self._load_preset(preset_manager.get_default_organization_config, "Default Organization"))
+        self.presets_menu.add_command(label="Load Photo Organization", command=lambda: self._load_preset(preset_manager.get_photo_organization_config, "Photo Organization"))
+        self.presets_menu.add_command(label="Load Music Organization", command=lambda: self._load_preset(preset_manager.get_music_organization_config, "Music Organization"))
+        self.presets_menu.add_command(label="Load Document Organization", command=lambda: self._load_preset(preset_manager.get_document_organization_config, "Document Organization"))
+        self.presets_menu.add_command(label="Load Cleanup Rules", command=lambda: self._load_preset(preset_manager.get_cleanup_rules_config, "Cleanup Rules"))
         self.menu_bar.add_cascade(label="Presets", menu=self.presets_menu)
-        
+
         # Help menu
         self.help_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.help_menu.add_command(label="Documentation", command=self.on_documentation)
@@ -162,18 +165,19 @@ class MainWindow:
             os.path.join(os.getenv("APPDATA", ""), "organize-tool", "config.yaml")
         ]
         
-        # Try to load default configuration if available
-        for config_path in config_paths:
-            if os.path.exists(config_path):
-                try:
-                    self.config_panel.load_configuration(config_path)
-                    self.set_status(f"Loaded configuration from {config_path}")
-                    return
-                except Exception as e:
-                    print(f"Error loading configuration: {str(e)}")
-        
-        # If no default config found, create a new one
-        self.on_new_config()
+        # Try to load default configuration using PresetManager
+        default_config = preset_manager.get_default_organization_config()
+        if default_config and default_config.get('rules'): # Check if rules exist
+            try:
+                self.config_panel.update_config(default_config)
+                self.set_status("Loaded default organization configuration")
+            except Exception as e:
+                print(f"Error loading default configuration via preset manager: {str(e)}")
+                # Fallback to new config if loading default fails
+                self.on_new_config()
+        else:
+            # If no default config found or it's empty, create a new one
+            self.on_new_config()
     
     def set_status(self, message, show_progress=False, progress_value=0):
         """Update the status bar with a message and optional progress."""
@@ -250,407 +254,40 @@ class MainWindow:
             self.preview_panel.run_organization()
     
     def on_schedule_organization(self):
-        """Open the scheduling dialog."""
-        # Create scheduling dialog
-        dialog = tk.Toplevel(self.parent)
-        dialog.title("Schedule Organization")
-        dialog.geometry("400x300")
-        dialog.transient(self.parent)
-        dialog.grab_set()
-        dialog.resizable(False, False)
-        
-        # Create dialog content
-        main_frame = ttk.Frame(dialog, padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        ttk.Label(main_frame, text="Schedule Type:").pack(anchor=tk.W, pady=(5, 2))
-        
-        schedule_var = tk.StringVar(value="daily")
-        
-        ttk.Radiobutton(main_frame, text="Daily", variable=schedule_var, value="daily").pack(anchor=tk.W, padx=20)
-        ttk.Radiobutton(main_frame, text="Weekly", variable=schedule_var, value="weekly").pack(anchor=tk.W, padx=20)
-        ttk.Radiobutton(main_frame, text="Monthly", variable=schedule_var, value="monthly").pack(anchor=tk.W, padx=20)
-        
-        ttk.Label(main_frame, text="Time:").pack(anchor=tk.W, pady=(10, 2))
-        
-        time_frame = ttk.Frame(main_frame)
-        time_frame.pack(anchor=tk.W, padx=20, pady=5)
-        
-        hour_var = tk.StringVar(value="02")
-        hour_spin = ttk.Spinbox(time_frame, from_=0, to=23, width=2, textvariable=hour_var, format="%02.0f")
-        hour_spin.pack(side=tk.LEFT)
-        
-        ttk.Label(time_frame, text=":").pack(side=tk.LEFT, padx=2)
-        
-        minute_var = tk.StringVar(value="00")
-        minute_spin = ttk.Spinbox(time_frame, from_=0, to=59, width=2, textvariable=minute_var, format="%02.0f")
-        minute_spin.pack(side=tk.LEFT)
-        
-        # Options
-        options_frame = ttk.LabelFrame(main_frame, text="Options", padding=10)
-        options_frame.pack(fill=tk.X, pady=10)
-        
-        simulation_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(options_frame, text="Run in simulation mode (no changes)", variable=simulation_var).pack(anchor=tk.W)
-        
-        # Button frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=10)
-        
-        def on_schedule():
-            try:
-                # Get the selected schedule
-                schedule_type = schedule_var.get()
-                time_str = f"{hour_var.get()}:{minute_var.get()}"
-                simulation = simulation_var.get()
-                
-                # Get command to add to crontab or scheduler
-                script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                command = ""
-                
-                if os.name == "posix":  # Unix-like
-                    organize_script = os.path.join(script_dir, "config", "organize-files.sh")
-                    if not os.path.exists(organize_script):
-                        organize_script = "organize"  # Use installed organize command
-                    
-                    command = f"{organize_script} "
-                    if simulation:
-                        command += "--simulate"
-                    else:
-                        command += "--run"
-                else:  # Windows
-                    organize_script = os.path.join(script_dir, "config", "organize-files.bat")
-                    if not os.path.exists(organize_script):
-                        organize_script = "organize"  # Use installed organize command
-                    
-                    command = f"{organize_script} "
-                    if simulation:
-                        command += "--simulate"
-                    else:
-                        command += "--run"
-                
-                # Display the command to add to scheduler
-                result_dialog = tk.Toplevel(dialog)
-                result_dialog.title("Schedule Information")
-                result_dialog.geometry("500x300")
-                result_dialog.transient(dialog)
-                result_dialog.grab_set()
-                
-                result_frame = ttk.Frame(result_dialog, padding=10)
-                result_frame.pack(fill=tk.BOTH, expand=True)
-                
-                ttk.Label(result_frame, text="Add the following to your scheduler:").pack(anchor=tk.W, pady=5)
-                
-                if os.name == "posix":  # Unix-like
-                    cron_min = minute_var.get()
-                    cron_hour = hour_var.get()
-                    cron_dom = "*"
-                    cron_month = "*"
-                    cron_dow = "*"
-                    
-                    if schedule_type == "weekly":
-                        cron_dow = "0"  # Sunday
-                    elif schedule_type == "monthly":
-                        cron_dom = "1"  # 1st of month
-                    
-                    cron_line = f"{cron_min} {cron_hour} {cron_dom} {cron_month} {cron_dow} {command}"
-                    
-                    ttk.Label(result_frame, text="For crontab:").pack(anchor=tk.W, pady=(10, 2))
-                    
-                    cron_text = tk.Text(result_frame, height=3, wrap=tk.WORD)
-                    cron_text.pack(fill=tk.X, pady=5)
-                    cron_text.insert("1.0", cron_line)
-                    cron_text.config(state='disabled')
-                    
-                    ttk.Label(result_frame, text="To add to crontab:").pack(anchor=tk.W, pady=(10, 2))
-                    ttk.Label(result_frame, text="1. Run 'crontab -e'").pack(anchor=tk.W, padx=20)
-                    ttk.Label(result_frame, text="2. Add the above line").pack(anchor=tk.W, padx=20)
-                    ttk.Label(result_frame, text="3. Save and exit").pack(anchor=tk.W, padx=20)
-                    
-                else:  # Windows
-                    ttk.Label(result_frame, text="For Windows Task Scheduler:").pack(anchor=tk.W, pady=(10, 2))
-                    ttk.Label(result_frame, text="1. Open Task Scheduler").pack(anchor=tk.W, padx=20)
-                    ttk.Label(result_frame, text="2. Create Basic Task...").pack(anchor=tk.W, padx=20)
-                    ttk.Label(result_frame, text=f"3. Set trigger: {schedule_type} at {time_str}").pack(anchor=tk.W, padx=20)
-                    ttk.Label(result_frame, text="4. Set action: Start a program").pack(anchor=tk.W, padx=20)
-                    ttk.Label(result_frame, text=f"5. Program/script: {command}").pack(anchor=tk.W, padx=20)
-                
-                ttk.Button(result_frame, text="Close", command=result_dialog.destroy).pack(pady=10)
-                
-                # Close the scheduling dialog
-                dialog.destroy()
-                
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to create schedule: {str(e)}")
-        
-        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Schedule", command=on_schedule).pack(side=tk.RIGHT, padx=5)
-    
+        """Open the scheduling dialog using the dedicated class."""
+        # Get the path of the currently saved config file, if any
+        current_config_path = self.config_panel.current_config_path
+        ScheduleDialog(self.parent, self.organize_runner, config_path=current_config_path)
+
     def on_find_duplicates(self):
         """Create a configuration focused on finding duplicates."""
         if messagebox.askyesno("Find Duplicates", 
-                              "This will create a configuration focused on finding duplicate files. Continue?"):
-            # Create a new configuration
-            config = {
-                'rules': [
-                    {
-                        'name': "Find Duplicate Files",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Documents")],
-                        'subfolders': True,
-                        'filters': [
-                            {'duplicate': {'detect_original_by': 'created'}}
-                        ],
-                        'actions': [
-                            {'echo': "Found duplicate: {path} (Original: {duplicate.original})"},
-                            {'move': {'dest': os.path.expanduser("~/Duplicates/{relative_path}/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    }
-                ]
-            }
-            
-            self.config_panel.update_config(config)
-            self.notebook.select(0)  # Switch to config tab
-            self.set_status("Created duplicate finding configuration")
+                               "This will create a configuration focused on finding duplicate files. Continue?"):
+            self._load_preset(preset_manager.get_find_duplicates_config, "Duplicate Finding")
     
     def on_rename_photos(self):
         """Create a configuration focused on renaming photos with EXIF data."""
         if messagebox.askyesno("Rename Photos", 
-                              "This will create a configuration focused on renaming photos using EXIF data. Continue?"):
-            # Create a new configuration
-            config = {
-                'rules': [
-                    {
-                        'name': "Rename Photos with EXIF Data",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Pictures")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'heic', 'arw', 'nef', 'cr2', 'dng']},
-                            {'exif': True}
-                        ],
-                        'actions': [
-                            {'echo': "Renaming photo: {path}"},
-                            {'rename': "{exif.image.make}_{exif.image.model}_{exif.image.datetime.year}-{exif.image.datetime.month}-{exif.image.datetime.day}_{exif.image.datetime.hour}-{exif.image.datetime.minute}-{exif.image.datetime.second}.{extension}"}
-                        ]
-                    },
-                    {
-                        'name': "Rename Photos without EXIF Data",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Pictures")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'heic', 'arw', 'nef', 'cr2', 'dng']},
-                            {'not': 'exif'},
-                            {'created': True}
-                        ],
-                        'actions': [
-                            {'echo': "Renaming photo without EXIF: {path}"},
-                            {'rename': "{parent_dir}_{created.year}-{created.month}-{created.day}_{name}.{extension}"}
-                        ]
-                    }
-                ]
-            }
-            
-            self.config_panel.update_config(config)
-            self.notebook.select(0)  # Switch to config tab
-            self.set_status("Created photo renaming configuration")
+                               "This will create a configuration focused on renaming photos using EXIF data. Continue?"):
+            self._load_preset(preset_manager.get_rename_photos_config, "Photo Renaming")
     
-    def on_load_default_organization(self):
-        """Load a full default organization configuration."""
-        if messagebox.askyesno("Load Default Organization", 
-                              "This will load a complete default organization configuration. Continue?"):
-            # Try to find the default configuration
-            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "organize.yaml")
-            
-            if os.path.exists(config_path):
-                self.config_panel.load_configuration(config_path)
-                self.set_status("Loaded default organization configuration")
-            else:
-                messagebox.showwarning("Not Found", "Default configuration file not found.")
-    
-    def on_load_photo_organization(self):
-        """Load a photo organization configuration."""
-        if messagebox.askyesno("Load Photo Organization", 
-                              "This will create a configuration for organizing photos. Continue?"):
-            # Create a photo organization configuration
-            config = {
-                'rules': [
-                    {
-                        'name': "Organize Photos by Date",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Pictures")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'heic', 'arw', 'nef', 'cr2', 'dng']},
-                            {'exif': True}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Pictures/Organized/{exif.image.datetime.year}/{exif.image.datetime.month}/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    },
-                    {
-                        'name': "Organize Photos without EXIF",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Pictures")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'heic', 'arw', 'nef', 'cr2', 'dng']},
-                            {'not': 'exif'},
-                            {'created': True}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Pictures/Organized/{created.year}/{created.month}/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    }
-                ]
-            }
-            
-            self.config_panel.update_config(config)
-            self.notebook.select(0)  # Switch to config tab
-            self.set_status("Created photo organization configuration")
-    
-    def on_load_music_organization(self):
-        """Load a music organization configuration."""
-        if messagebox.askyesno("Load Music Organization", 
-                              "This will create a configuration for organizing music files. Continue?"):
-            # Create a music organization configuration
-            config = {
-                'rules': [
-                    {
-                        'name': "Organize Music Files",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Music")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['mp3', 'wav', 'aac', 'flac', 'm4a', 'wma', 'opus', 'ogg']}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Music/Organized/{extension.upper()}/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    },
-                    {
-                        'name': "Handle Music Duplicates",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Music")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['mp3', 'wav', 'aac', 'flac', 'm4a', 'wma', 'opus', 'ogg']},
-                            {'duplicate': {'detect_original_by': 'created'}}
-                        ],
-                        'actions': [
-                            {'echo': "Found music duplicate: {path} (Original: {duplicate.original})"},
-                            {'move': {'dest': os.path.expanduser("~/Music/Duplicates/{path.stem}_duplicate_{duplicate.count}.{extension}"), 'on_conflict': 'rename_new'}}
-                        ]
-                    }
-                ]
-            }
-            
-            self.config_panel.update_config(config)
-            self.notebook.select(0)  # Switch to config tab
-            self.set_status("Created music organization configuration")
-    
-    def on_load_document_organization(self):
-        """Load a document organization configuration."""
-        if messagebox.askyesno("Load Document Organization", 
-                              "This will create a configuration for organizing documents. Continue?"):
-            # Create a document organization configuration
-            config = {
-                'rules': [
-                    {
-                        'name': "Organize Text Documents",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Documents")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['txt', 'rtf', 'md', 'tex']}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Documents/Organized/Text/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    },
-                    {
-                        'name': "Organize Office Documents",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Documents")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp']}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Documents/Organized/Office/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    },
-                    {
-                        'name': "Organize PDF Documents",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Documents")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['pdf']}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Documents/Organized/PDF/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    }
-                ]
-            }
-            
-            self.config_panel.update_config(config)
-            self.notebook.select(0)  # Switch to config tab
-            self.set_status("Created document organization configuration")
-    
-    def on_load_cleanup_rules(self):
-        """Load cleanup rules configuration."""
-        if messagebox.askyesno("Load Cleanup Rules", 
-                              "This will create a configuration for cleaning up temporary files. Continue?"):
-            # Create a cleanup configuration
-            config = {
-                'rules': [
-                    {
-                        'name': "Clean Temporary Files",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Downloads")],
-                        'subfolders': True,
-                        'filters': [
-                            {'extension': ['tmp', 'bak', 'cache', 'log']}
-                        ],
-                        'actions': [
-                            {'move': {'dest': os.path.expanduser("~/Cleanup/Temporary/"), 'on_conflict': 'rename_new'}}
-                        ]
-                    },
-                    {
-                        'name': "Find Duplicate Files",
-                        'enabled': True,
-                        'targets': 'files',
-                        'locations': [os.path.expanduser("~/Downloads")],
-                        'subfolders': True,
-                        'filters': [
-                            {'duplicate': {'detect_original_by': 'created'}}
-                        ],
-                        'actions': [
-                            {'echo': "Found duplicate: {path} (Original: {duplicate.original})"},
-                            {'move': {'dest': os.path.expanduser("~/Cleanup/Duplicates/{path.stem}_duplicate_{duplicate.count}.{extension}"), 'on_conflict': 'rename_new'}}
-                        ]
-                    }
-                ]
-            }
-            
-            self.config_panel.update_config(config)
-            self.notebook.select(0)  # Switch to config tab
-            self.set_status("Created cleanup rules configuration")
-    
+    def _load_preset(self, preset_func, preset_name):
+        """Helper function to load a preset configuration."""
+        if messagebox.askyesno(f"Load {preset_name} Preset",
+                              f"This will replace your current configuration with the {preset_name} preset. Continue?"):
+            try:
+                config = preset_func()
+                if config and config.get('rules'):
+                    self.config_panel.update_config(config)
+                    self.notebook.select(0)  # Switch to config tab
+                    self.set_status(f"Loaded {preset_name} configuration preset")
+                else:
+                    messagebox.showwarning("Preset Error", f"Could not generate or load the {preset_name} preset.")
+            except Exception as e:
+                messagebox.showerror("Error Loading Preset", f"Failed to load {preset_name} preset: {str(e)}")
+
+    # Remove the individual on_load_* methods as they are replaced by _load_preset calls in the menu
+
     def on_documentation(self):
         """Show the documentation."""
         try:
@@ -663,40 +300,9 @@ class MainWindow:
                                "https://organize.readthedocs.io/")
     
     def on_about(self):
-        """Show the about dialog."""
-        about_dialog = tk.Toplevel(self.parent)
-        about_dialog.title("About File Organization System")
-        about_dialog.geometry("400x300")
-        about_dialog.transient(self.parent)
-        about_dialog.grab_set()
-        about_dialog.resizable(False, False)
-        
-        # Create dialog content
-        main_frame = ttk.Frame(about_dialog, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Title
-        title_label = ttk.Label(main_frame, text="File Organization System", font=("", 16, "bold"))
-        title_label.pack(pady=(0, 10))
-        
-        # Version
-        version_label = ttk.Label(main_frame, text="Version 1.0.0")
-        version_label.pack(pady=(0, 20))
-        
-        # Description
-        desc_text = "A graphical user interface for the powerful organize-tool file organization system.\n\n" \
-                    "This application helps you automate the organization of your files based on sophisticated rules."
-        desc_label = ttk.Label(main_frame, text=desc_text, wraplength=350, justify=tk.CENTER)
-        desc_label.pack(pady=(0, 20))
-        
-        # Credits
-        credits_label = ttk.Label(main_frame, text="Based on organize-tool by Thomas Feldmann")
-        credits_label.pack()
-        
-        # Close button
-        close_button = ttk.Button(main_frame, text="Close", command=about_dialog.destroy)
-        close_button.pack(pady=20)
-    
+        """Show the about dialog using the dedicated class."""
+        AboutDialog(self.parent) # Instantiate the dialog
+
     def on_close(self):
         """Handle window close event."""
         # Check for unsaved changes

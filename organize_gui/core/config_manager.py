@@ -18,32 +18,13 @@ class ConfigManager:
         """Initialize the configuration manager."""
         # The current configuration
         self.config = None
-        
-        # Path to the customize_config.py script
-        self.customize_script = self._find_customize_script()
-    
-    def _find_customize_script(self):
-        """Find the path to the customize_config.py script."""
-        # Start from the current directory and go up
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
-        # Look for config directory
-        config_dir = os.path.join(current_dir, "config")
-        script_path = os.path.join(config_dir, "customize_config.py")
-        
-        if os.path.exists(script_path):
-            return script_path
-        
-        # If not found, search in potential locations
-        for root, dirs, files in os.walk(current_dir):
-            if "customize_config.py" in files:
-                return os.path.join(root, "customize_config.py")
-        
-        # If not found, return the default path anyway
-        return script_path
-    
+        self.current_config_path = None # Track the path of the loaded config
+
+    # Removed _find_customize_script method
+
     def create_new_config(self):
         """Create a new empty configuration."""
+        self.current_config_path = None # Reset path for new config
         self.config = {
             'rules': []
         }
@@ -52,15 +33,17 @@ class ConfigManager:
         """Load a configuration from a file."""
         with open(config_path, 'r') as file:
             self.config = yaml.safe_load(file)
-    
+        self.current_config_path = config_path # Store the path
+
     def save_config(self, config_path):
         """Save the current configuration to a file."""
         if not self.config:
             raise ValueError("No configuration to save")
-        
+
         with open(config_path, 'w') as file:
             yaml.dump(self.config, file, default_flow_style=False, sort_keys=False)
-    
+        self.current_config_path = config_path # Update path on save
+
     def get_current_paths(self):
         """Get the current source and destination paths from the configuration."""
         if not self.config or 'rules' not in self.config or not self.config['rules']:
@@ -134,47 +117,14 @@ class ConfigManager:
         """Update the source and destination paths in the configuration."""
         if not self.config or 'rules' not in self.config:
             raise ValueError("No configuration loaded")
-        
-        # Use the customize_config.py script if available
-        if os.path.exists(self.customize_script):
-            self._update_with_script(source_dir, dest_dir)
-        else:
-            # Fallback to manual update
-            self._update_manually(source_dir, dest_dir)
-    
-    def _update_with_script(self, source_dir, dest_dir):
-        """Update paths using the customize_config.py script."""
-        # Create a temporary file with the current configuration
-        with tempfile.NamedTemporaryFile(suffix='.yaml', delete=False) as temp_file:
-            temp_path = temp_file.name
-            yaml.dump(self.config, temp_file, default_flow_style=False, sort_keys=False)
-        
-        try:
-            # Run the customize_config.py script
-            result = subprocess.run(
-                [
-                    "python", self.customize_script,
-                    "--config", temp_path,
-                    "--source", source_dir,
-                    "--dest-base", dest_dir
-                ],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.returncode != 0:
-                raise RuntimeError(f"Failed to update paths: {result.stderr}")
-            
-            # Load the updated configuration
-            with open(temp_path, 'r') as file:
-                self.config = yaml.safe_load(file)
-        finally:
-            # Clean up the temporary file
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-    
+
+        # Directly use the manual update method
+        self._update_manually(source_dir, dest_dir)
+
+    # Removed _update_with_script method
+
     def _update_manually(self, source_dir, dest_dir):
-        """Update paths manually (fallback if script is not available)."""
+        """Update paths manually."""
         # Update source locations
         for rule in self.config['rules']:
             if 'locations' in rule:

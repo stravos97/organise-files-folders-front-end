@@ -333,37 +333,65 @@ class RulesPanel(ttk.Frame):
 
     def update_rules(self, config):
         """Update the rules list from a configuration object."""
-        if not config or 'rules' not in config or not isinstance(config['rules'], list):
-            messagebox.showerror("Error", "Invalid configuration - 'rules' list not found or invalid.")
-            self.rules = [] # Reset internal rules
+        print(f"RulesPanel.update_rules called with config: {config is not None}")
+
+        if not config:
+            print("Error: Config is None or empty")
+            messagebox.showerror("Error", "Invalid configuration - empty or None.")
+            self.rules.clear() # Reset internal rules
+            return
+
+        if 'rules' not in config:
+            print("Error: 'rules' key not found in config")
+            messagebox.showerror("Error", "Invalid configuration - 'rules' list not found.")
+            self.rules.clear() # Reset internal rules
+            return
+
+        if not isinstance(config['rules'], list):
+            print(f"Error: 'rules' is not a list, it's a {type(config['rules'])}")
+            messagebox.showerror("Error", "Invalid configuration - 'rules' is not a list.")
+            self.rules.clear() # Reset internal rules
+            return
+
+        print(f"Config contains {len(config['rules'])} rules")
+
+        # Perform a basic check if rules seem valid (list of dicts)
+        if not all(isinstance(r, dict) for r in config['rules']):
+            print("Warning: Some rules are not dictionaries")
+            messagebox.showwarning("Warning", "Configuration contains non-dictionary items in 'rules' list. Skipping invalid items.")
+            # --- Start of fix ---
+            valid_rules = [r for r in config['rules'] if isinstance(r, dict)]
+            self.rules.clear() # Clear the existing list
+            self.rules.extend(valid_rules) # Add new rules to the existing list
         else:
-             # Perform a basic check if rules seem valid (list of dicts)
-             if not all(isinstance(r, dict) for r in config['rules']):
-                  messagebox.showwarning("Warning", "Configuration contains non-dictionary items in 'rules' list. Skipping invalid items.")
-                  self.rules = [r for r in config['rules'] if isinstance(r, dict)]
-             else:
-                  self.rules = config['rules'] # Assign the new list
+            print(f"All {len(config['rules'])} rules are valid dictionaries")
+            self.rules.clear() # Clear the existing list
+            self.rules.extend(config['rules']) # Add new rules to the existing list
+            # --- End of fix ---
 
         # Store the index of the currently selected rule if possible
         selected_index_before_update = self.rule_list_manager.get_selected_rule_index() if hasattr(self, 'rule_list_manager') else None
+        print(f"Previously selected rule index: {selected_index_before_update}")
 
         # Refresh the list display using the new self.rules data
         if hasattr(self, 'rule_list_manager'):
+            print(f"Refreshing rule list with {len(self.rules)} rules")
             self.rule_list_manager.refresh_list()
         else:
-             # Should not happen if _create_widgets was called, but handle defensively
-             print("Warning: RuleListManager not initialized during update_rules.")
-             self._create_widgets() # Attempt to create widgets if missing
-             self.rule_list_manager.refresh_list()
-
+            # Should not happen if _create_widgets was called, but handle defensively
+            print("Warning: RuleListManager not initialized during update_rules.")
+            self._create_widgets() # Attempt to create widgets if missing
+            self.rule_list_manager.refresh_list()
 
         # Try to re-select the rule that was selected before the update
         if selected_index_before_update is not None and 0 <= selected_index_before_update < len(self.rules):
-             self.rule_list_manager.select_rule_by_index(selected_index_before_update)
-             # _on_rule_selected will handle updating the details panel
+            print(f"Re-selecting rule at index {selected_index_before_update}")
+            self.rule_list_manager.select_rule_by_index(selected_index_before_update)
+            # _on_rule_selected will handle updating the details panel
         else:
-             # If previous selection is invalid or no selection, clear details panel
-             self.details_panel.clear_details()
+            # If previous selection is invalid or no selection, clear details panel
+            print("Clearing details panel (no valid selection)")
+            self.details_panel.clear_details()
 
     def get_updated_config(self):
         """Get the updated configuration with current rules."""

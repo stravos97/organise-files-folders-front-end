@@ -166,12 +166,21 @@ class MainWindow:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         prioritized_config_path = os.path.abspath(os.path.join(script_dir, '..', '..', '..', 'organise_dirs', 'config', 'organize.yaml'))
 
+        print(f"Looking for prioritized config file at: {prioritized_config_path}")
         if os.path.exists(prioritized_config_path):
+            print(f"Found prioritized config file: {prioritized_config_path}")
             try:
                 # Use the config_panel's load method which updates UI
                 if self.config_panel.load_configuration(prioritized_config_path):
+                    print("Successfully loaded prioritized config file")
                     self.set_status(f"Loaded default config: {os.path.basename(prioritized_config_path)}")
                     loaded_successfully = True
+                    
+                    # Force an update to the rules panel
+                    config = self.config_panel.get_current_config(from_editor=True)
+                    if config and 'rules' in config:
+                        print(f"Explicitly updating rules panel with {len(config['rules'])} rules")
+                        self.rules_panel.update_rules(config)
                 else:
                     # load_configuration shows its own error message
                     print(f"Attempted to load {prioritized_config_path} but failed.")
@@ -188,9 +197,14 @@ class MainWindow:
             try:
                 default_config = preset_manager.get_default_organization_config()
                 if default_config and default_config.get('rules'): # Check if rules exist
+                    print(f"Loading default preset with {len(default_config['rules'])} rules")
                     self.config_panel.update_config(default_config) # Update panel with preset data
                     self.set_status("Loaded default organization preset")
                     loaded_successfully = True
+                    
+                    # Force an update to the rules panel
+                    print("Explicitly updating rules panel with default preset")
+                    self.rules_panel.update_rules(default_config)
                 else:
                      print("Default preset was empty or invalid.")
             except Exception as e:
@@ -202,6 +216,12 @@ class MainWindow:
             # Use the method that updates the UI
             self.config_panel.new_configuration()
             self.set_status("Created new configuration")
+            
+            # Force an update to the rules panel with the new configuration
+            config = self.config_panel.get_current_config(from_editor=True)
+            if config:
+                print(f"Explicitly updating rules panel with new config containing {len(config.get('rules', []))} rules")
+                self.rules_panel.update_rules(config)
 
     def set_status(self, message, show_progress=False, progress_value=0):
         """Update the status bar with a message and optional progress."""
@@ -225,7 +245,10 @@ class MainWindow:
             # Get config potentially from editor if that's the source of truth
             config = self.config_panel.get_current_config(from_editor=True)
             if config:
+                print(f"Config changed event: Updating rules panel with config containing {len(config.get('rules', []))} rules")
                 self.rules_panel.update_rules(config)
+            else:
+                print("Config changed event: No valid config found to update rules panel")
 
     def on_rules_changed(self, event):
         """Handle rules change events."""
@@ -249,11 +272,24 @@ class MainWindow:
                               "Are you sure you want to create a new configuration? Unsaved changes will be lost."):
             self.config_panel.new_configuration() # This method handles UI and config_manager
             self.set_status("Created new configuration")
+            
+            # Force an update to the rules panel
+            config = self.config_panel.get_current_config(from_editor=True)
+            if config and 'rules' in config:
+                print(f"Explicitly updating rules panel after creating new config with {len(config['rules'])} rules")
+                self.rules_panel.update_rules(config)
 
     def on_open_config(self):
         """Open an existing configuration."""
         if self.config_panel.open_configuration_dialog():
+            print(f"Configuration loaded from {os.path.basename(self.config_panel.current_config_path)}")
             self.set_status(f"Configuration loaded from {os.path.basename(self.config_panel.current_config_path)}")
+            
+            # Force an update to the rules panel
+            config = self.config_panel.get_current_config(from_editor=True)
+            if config and 'rules' in config:
+                print(f"Explicitly updating rules panel after opening config with {len(config['rules'])} rules")
+                self.rules_panel.update_rules(config)
 
     def on_save_config(self):
         """Save the current configuration."""
@@ -305,12 +341,22 @@ class MainWindow:
             try:
                 config = preset_func()
                 if config and config.get('rules'):
-                    self.config_panel.update_config(config) # Update panel with preset data
-                    self.notebook.select(0)  # Switch to config tab
+                    print(f"Loading {preset_name} preset with {len(config['rules'])} rules")
+                    
+                    # Update config panel
+                    self.config_panel.update_config(config)
+                    
+                    # Explicitly update rules panel
+                    print(f"Explicitly updating rules panel with {preset_name} preset")
+                    self.rules_panel.update_rules(config)
+                    
+                    # Switch to config tab
+                    self.notebook.select(0)
                     self.set_status(f"Loaded {preset_name} configuration preset")
                 else:
                     messagebox.showwarning("Preset Error", f"Could not generate or load the {preset_name} preset.")
             except Exception as e:
+                print(f"Error loading {preset_name} preset: {str(e)}")
                 messagebox.showerror("Error Loading Preset", f"Failed to load {preset_name} preset: {str(e)}")
 
     # Remove the individual on_load_* methods as they are replaced by _load_preset calls in the menu

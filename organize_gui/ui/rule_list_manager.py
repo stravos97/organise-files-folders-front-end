@@ -134,6 +134,8 @@ class RuleListManager:
         """Clear and re-populate the Treeview based on current filters."""
         search_text = self.search_var.get().lower()
         category = self.category_var.get()
+        
+        print(f"RuleListManager.refresh_list: rules_data_ref has {len(self.rules_data_ref)} items")
 
         # Clear the tree
         for item in self.rules_tree.get_children():
@@ -149,6 +151,8 @@ class RuleListManager:
             rule_name = rule.get('name', f'Unnamed Rule {i+1}')
             rule_name_lower = rule_name.lower()
             rule_category = self._get_rule_category(rule)
+            
+            print(f"Processing rule {i}: '{rule_name}', enabled: {rule.get('enabled', True)}, category: {rule_category}")
 
             # Check if rule matches filters
             name_match = not search_text or search_text in rule_name_lower
@@ -160,7 +164,9 @@ class RuleListManager:
                 item_id = str(i)
                 self.rules_tree.insert("", "end", iid=item_id, text=rule_name,
                                        values=(enabled_text, rule_category))
-                # We don't need tags anymore as iid stores the index
+                print(f"Added rule to tree: {rule_name} (id: {item_id})")
+            else:
+                print(f"Rule filtered out: '{rule_name}' - name match: {name_match}, category match: {category_match}")
 
     def get_selected_rule_index(self):
         """Return the index (from rules_data_ref) of the selected rule."""

@@ -176,9 +176,9 @@ class OrganizeRunner:
                  # Removed the Library/Application Support check as it's less standard for organize-tool CLI
 
             cmd = [self.organize_cmd]
-            if verbose: cmd.append("--verbose") # Moved here
-            cmd.extend(['sim'] if simulation else ['run']) # Add subcommand after options
-
+            cmd.append('sim' if simulation else 'run')
+            # Remove the verbose flag entirely - it's not supported
+            
             # Add config path if one was determined
             if config_to_use:
                  cmd.append(config_to_use)

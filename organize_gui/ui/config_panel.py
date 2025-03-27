@@ -212,12 +212,16 @@ class ConfigPanel(ttk.Frame):
         if directory: self.dest_var.set(directory)
 
     def _browse_config(self):
-        filetypes = [("YAML files", "*.yaml;*.yml"), ("All files", "*.*")]
-        filename = filedialog.askopenfilename(title="Select Configuration File", filetypes=filetypes)
-        if filename:
-            self.config_var.set(filename)
-            self.current_config_path = filename
-            self._load_current_config() # Auto-load after browse
+        try:
+            # Use space separation for macOS compatibility
+            filetypes = [("YAML files", "*.yaml *.yml"), ("All files", "*")]
+            filename = filedialog.askopenfilename(title="Select Configuration File", filetypes=filetypes)
+            if filename:
+                self.config_var.set(filename)
+                self.current_config_path = filename
+                self._load_current_config() # Auto-load after browse
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open file dialog: {str(e)}")
 
     def _load_current_config(self):
         config_path = self.config_var.get()
@@ -428,21 +432,36 @@ class ConfigPanel(ttk.Frame):
     def get_current_config(self, from_editor=False):
         """Get the current configuration object, optionally prioritizing editor."""
         config = None
+        print(f"ConfigPanel.get_current_config(from_editor={from_editor})")
+        
         if from_editor and hasattr(self, 'yaml_editor_panel'):
             yaml_text = self.yaml_editor_panel.get_text().strip()
+            print(f"YAML editor text length: {len(yaml_text)}")
             if yaml_text:
                 try:
                     parsed_config = yaml.safe_load(yaml_text)
-                    if parsed_config and isinstance(parsed_config, dict) and 'rules' in parsed_config: config = parsed_config
-                    else: print("Warning: YAML editor content is invalid.")
-                except Exception as e: print(f"Warning: Could not parse YAML editor content: {e}")
-        if config is None: config = self.config_manager.config if self.config_manager else self._config
+                    if parsed_config and isinstance(parsed_config, dict) and 'rules' in parsed_config:
+                        config = parsed_config
+                        print(f"Successfully parsed config from YAML editor with {len(config.get('rules', []))} rules")
+                    else:
+                        print(f"Warning: YAML editor content is invalid. Parsed result: {parsed_config}")
+                except Exception as e:
+                    print(f"Warning: Could not parse YAML editor content: {e}")
+        
+        if config is None:
+            config = self.config_manager.config if self.config_manager else self._config
+            print(f"Using config from {'config_manager' if self.config_manager else 'internal _config'}: {config is not None}")
+            if config:
+                print(f"Config has {len(config.get('rules', []))} rules")
+        
         if config is None: # Final fallback
             print("Warning: No valid configuration found, returning default structure.")
             ui_source = self.source_entries[0]['var'].get() if self.source_entries else os.path.expanduser("~/Documents")
             ui_dest_base = self.dest_var.get() or os.path.expanduser("~/Documents")
             ui_dest_org = os.path.join(ui_dest_base, "Organized/").replace('\\','/')
             config = {'rules': [{'name': 'Example Rule', 'enabled': True, 'targets': 'files', 'locations': [ui_source], 'subfolders': self.subfolders_var.get(), 'filters': [{'extension': ['txt', 'pdf']}], 'actions': [{'move': {'dest': ui_dest_org, 'on_conflict': 'rename_new'}}]}]}
+            print("Created default config with 1 example rule")
+        
         return config
 
     def new_configuration(self):
@@ -463,29 +482,68 @@ class ConfigPanel(ttk.Frame):
 
     def load_configuration(self, config_path):
         """Load a configuration from a file."""
+        print(f"ConfigPanel.load_configuration: Loading from {config_path}")
         try:
+            # Read the file content directly first for debugging
+            with open(config_path, 'r') as file:
+                file_content = file.read()
+                print(f"File content length: {len(file_content)}")
+                # Try to parse it
+                raw_config = yaml.safe_load(file_content)
+                print(f"Raw config parsed: {raw_config is not None}")
+                if raw_config and 'rules' in raw_config:
+                    print(f"Raw config contains {len(raw_config['rules'])} rules")
+            
+            # Now load it properly
             if self.config_manager:
-                self.config_manager.load_config(config_path); config = self.config_manager.config
+                print("Using ConfigManager to load config")
+                self.config_manager.load_config(config_path)
+                config = self.config_manager.config
             else:
-                with open(config_path, 'r') as file: config = yaml.safe_load(file)
-                if not config or not isinstance(config, dict) or 'rules' not in config: raise ValueError("Invalid format")
+                print("Loading config directly")
+                with open(config_path, 'r') as file:
+                    config = yaml.safe_load(file)
+                if not config or not isinstance(config, dict) or 'rules' not in config:
+                    raise ValueError("Invalid format")
                 self._config = config
-            self.current_config_path = config_path; self.config_var.set(config_path)
+            
+            print(f"Config loaded with {len(config.get('rules', []))} rules")
+            self.current_config_path = config_path
+            self.config_var.set(config_path)
+            
+            # Extract paths and update UI
             self._extract_paths_from_config(config)
             self._update_tree_view()
+            
+            # Update YAML editor
             if hasattr(self, 'yaml_editor_panel'):
-                 yaml_str = yaml.dump(config, default_flow_style=False, sort_keys=False, indent=2)
-                 self.yaml_editor_panel.set_text(yaml_str)
+                yaml_str = yaml.dump(config, default_flow_style=False, sort_keys=False, indent=2)
+                print(f"Setting YAML editor text (length: {len(yaml_str)})")
+                self.yaml_editor_panel.set_text(yaml_str)
+            else:
+                print("Warning: yaml_editor_panel not available")
+            
+            # Generate event to notify other components
+            print("Generating ConfigurationChanged event")
             self.event_generate("<<ConfigurationChanged>>", when="tail")
             return True
-        except Exception as e: messagebox.showerror("Error", f"Failed to load configuration: {str(e)}"); return False
+        except Exception as e:
+            print(f"Error loading configuration: {str(e)}")
+            messagebox.showerror("Error", f"Failed to load configuration: {str(e)}")
+            return False
 
     def open_configuration_dialog(self):
         """Open a file dialog to select and load a configuration."""
-        filetypes = [("YAML files", "*.yaml;*.yml"), ("All files", "*.*")]
-        filename = filedialog.askopenfilename(title="Open Configuration File", filetypes=filetypes)
-        if filename: return self.load_configuration(filename)
-        return False
+        try:
+            # Use space separation for macOS compatibility
+            filetypes = [("YAML files", "*.yaml *.yml"), ("All files", "*")]
+            filename = filedialog.askopenfilename(title="Open Configuration File", filetypes=filetypes)
+            if filename:
+                return self.load_configuration(filename)
+            return False
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open file dialog: {str(e)}")
+            return False
 
     def save_configuration(self):
         """Save the current configuration (from editor) to its file."""
@@ -502,10 +560,11 @@ class ConfigPanel(ttk.Frame):
 
     def save_configuration_as(self):
         """Save the current configuration (from editor) to a new file."""
-        filetypes = [("YAML files", "*.yaml;*.yml"), ("All files", "*.*")]
-        filename = filedialog.asksaveasfilename(title="Save Configuration As", filetypes=filetypes, defaultextension=".yaml")
-        if filename:
-            try:
+        try:
+            # Use space separation for macOS compatibility
+            filetypes = [("YAML files", "*.yaml *.yml"), ("All files", "*")]
+            filename = filedialog.asksaveasfilename(title="Save Configuration As", filetypes=filetypes, defaultextension=".yaml")
+            if filename:
                 config_text = self.yaml_editor_panel.get_text()
                 config = yaml.safe_load(config_text)
                 if not config or not isinstance(config, dict) or 'rules' not in config: raise ValueError("Invalid config in editor.")
@@ -514,16 +573,31 @@ class ConfigPanel(ttk.Frame):
                 if self.config_manager: self.config_manager.config = config
                 else: self._config = config
                 return True
-            except Exception as e: messagebox.showerror("Error", f"Failed to save configuration: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save configuration: {str(e)}")
         return False
 
     def update_config(self, config):
         """Update the panel's state with an external configuration object."""
-        if self.config_manager: self.config_manager.config = config
-        else: self._config = config
+        print(f"ConfigPanel.update_config: Updating with config containing {len(config.get('rules', []))} rules")
+        
+        if self.config_manager:
+            self.config_manager.config = config
+            print("Updated config_manager.config")
+        else:
+            self._config = config
+            print("Updated internal _config")
+            
         self._extract_paths_from_config(config)
         self._update_tree_view()
+        
         if hasattr(self, 'yaml_editor_panel'):
-             yaml_str = yaml.dump(config, default_flow_style=False, sort_keys=False, indent=2)
-             self.yaml_editor_panel.set_text(yaml_str)
-        # Avoid generating event here if called from an event handler
+            yaml_str = yaml.dump(config, default_flow_style=False, sort_keys=False, indent=2)
+            print(f"Setting YAML editor text (length: {len(yaml_str)})")
+            self.yaml_editor_panel.set_text(yaml_str)
+        else:
+            print("Warning: yaml_editor_panel not available")
+        
+        # Always generate the event to ensure rules panel is updated
+        print("Generating ConfigurationChanged event from update_config")
+        self.event_generate("<<ConfigurationChanged>>", when="tail")

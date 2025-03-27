@@ -93,13 +93,6 @@ When you use the application, these components work together:
     *   The interface updates to show you the log output and results.
 4.  After organization completes, the **Results Tab** displays a summary of what happened.
 
-## License
-
-This project uses the MIT License - see the LICENSE file for details (if one exists in the repository).
-
-## Credits
-
-- [organize-tool](https://github.com/tfeldmann/organize) - The powerful organization engine that makes this possible.
 
 ## Creating a Standalone Executable (using PyInstaller)
 
@@ -426,3 +419,12 @@ This guide outlines the conceptual steps involved in creating the `organize-gui`
 *   **`run.sh` / `run.bat`:** Provide simple scripts to activate a virtual environment (if needed) and run `python app.py`, making it easy for users to start the application directly from the source directory.
 
 This step-by-step process builds the application incrementally, starting with the core logic and progressively adding UI layers and features.
+
+
+## License
+
+This project uses the MIT License - see the LICENSE file for details (if one exists in the repository).
+
+## Credits
+
+- [organize-tool](https://github.com/tfeldmann/organize) - The powerful organization engine that makes this possible.

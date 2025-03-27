@@ -7,7 +7,7 @@ organization rules, including filters and actions.
 
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, font
 import json
 import yaml
 import re
@@ -25,53 +25,62 @@ class RulesPanel(ttk.Frame):
         
         # Create the UI components
         self._create_widgets()
-    
+
     def _create_widgets(self):
-        """Create the UI components for the rules panel."""
+        """Create the UI components for the rules panel using grid."""
+        # Configure main frame grid
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
         # Main layout - split view with rules list on left and details on right
         self.paned_window = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
-        self.paned_window.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Left panel - Rules list
-        left_frame = ttk.Frame(self.paned_window)
+        self.paned_window.grid(row=0, column=0, sticky='nsew', padx=10, pady=10)
+
+        # --- Left panel - Rules list ---
+        left_frame = ttk.Frame(self.paned_window, padding=5)
         self.paned_window.add(left_frame, weight=1)
-        
-        # Rules list with enable/disable checkboxes
+        left_frame.grid_rowconfigure(0, weight=1)
+        left_frame.grid_columnconfigure(0, weight=1)
+
+        # Rules list LabelFrame
         rules_frame = ttk.LabelFrame(left_frame, text="Organization Rules", padding=(10, 5))
-        rules_frame.pack(fill=tk.BOTH, expand=True)
-        
+        rules_frame.grid(row=0, column=0, sticky='nsew')
+        rules_frame.grid_columnconfigure(0, weight=1)
+        rules_frame.grid_rowconfigure(1, weight=1) # Make list_frame expand
+
         # Search and filter controls
         filter_frame = ttk.Frame(rules_frame)
-        filter_frame.pack(fill=tk.X, pady=5)
-        
-        # Search box
+        filter_frame.grid(row=0, column=0, sticky='ew', pady=(0, 5))
+        filter_frame.grid_columnconfigure(1, weight=1) # Make search entry expand
+
         search_label = ttk.Label(filter_frame, text="Search:")
-        search_label.pack(side=tk.LEFT, padx=(0, 5))
-        
+        search_label.grid(row=0, column=0, padx=(0, 5))
+
         self.search_var = tk.StringVar()
-        self.search_var.trace("w", self._filter_rules)
-        search_entry = ttk.Entry(filter_frame, textvariable=self.search_var, width=20)
-        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-        
-        # Category filter
+        self.search_var.trace_add("write", self._filter_rules) # Use trace_add
+        search_entry = ttk.Entry(filter_frame, textvariable=self.search_var)
+        search_entry.grid(row=0, column=1, sticky='ew', padx=(0, 10))
+
         category_label = ttk.Label(filter_frame, text="Category:")
-        category_label.pack(side=tk.LEFT, padx=(0, 5))
-        
+        category_label.grid(row=0, column=2, padx=(0, 5))
+
         self.category_var = tk.StringVar(value="All")
-        categories = ["All", "Documents", "Media", "Development", "Archives", 
+        categories = ["All", "Documents", "Media", "Development", "Archives",
                       "Applications", "Fonts", "System", "Other", "Cleanup"]
-        category_combo = ttk.Combobox(filter_frame, textvariable=self.category_var, 
+        category_combo = ttk.Combobox(filter_frame, textvariable=self.category_var,
                                      values=categories, state="readonly", width=15)
-        category_combo.pack(side=tk.LEFT)
+        category_combo.grid(row=0, column=3)
         category_combo.bind("<<ComboboxSelected>>", self._filter_rules)
-        
+
         # Rules list with scrollbar
         list_frame = ttk.Frame(rules_frame)
-        list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        scrollbar = ttk.Scrollbar(list_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
+        list_frame.grid(row=1, column=0, sticky='nsew', pady=5)
+        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(0, weight=1)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        scrollbar.grid(row=0, column=1, sticky='ns')
+
         # Use a Treeview for better presentation of rules
         self.rules_tree = ttk.Treeview(
             list_frame,
@@ -79,233 +88,225 @@ class RulesPanel(ttk.Frame):
             yscrollcommand=scrollbar.set,
             selectmode="browse"
         )
-        self.rules_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.rules_tree.grid(row=0, column=0, sticky='nsew')
         scrollbar.config(command=self.rules_tree.yview)
-        
+
         # Configure columns
-        self.rules_tree.column("#0", width=220, minwidth=200)  # Name column
-        self.rules_tree.column("enabled", width=60, minwidth=60, anchor=tk.CENTER)
-        self.rules_tree.column("category", width=100, minwidth=80, anchor=tk.CENTER)
-        
+        self.rules_tree.column("#0", width=220, minwidth=180, stretch=tk.YES) # Name column
+        self.rules_tree.column("enabled", width=60, minwidth=60, anchor=tk.CENTER, stretch=tk.NO)
+        self.rules_tree.column("category", width=100, minwidth=80, anchor=tk.W, stretch=tk.NO)
+
         self.rules_tree.heading("#0", text="Rule Name")
         self.rules_tree.heading("enabled", text="Enabled")
         self.rules_tree.heading("category", text="Category")
-        
+
         # Bind selection event
         self.rules_tree.bind("<<TreeviewSelect>>", self._on_rule_selected)
-        
-        # Rule actions
+
+        # Rule actions (using grid for alignment)
         action_frame = ttk.Frame(rules_frame)
-        action_frame.pack(fill=tk.X, pady=5)
-        
-        # Create button icons with descriptive text
-        add_button = ttk.Button(action_frame, text="Add Rule", 
-                               command=self._add_rule)
-        add_button.pack(side=tk.LEFT, padx=5)
-        
-        edit_button = ttk.Button(action_frame, text="Edit Rule", 
-                                command=self._edit_rule)
+        action_frame.grid(row=2, column=0, sticky='ew', pady=5)
+        # Add buttons using pack for simple horizontal layout
+        add_button = ttk.Button(action_frame, text="Add", command=self._add_rule)
+        add_button.pack(side=tk.LEFT, padx=(0, 5))
+        edit_button = ttk.Button(action_frame, text="Edit", command=self._edit_rule)
         edit_button.pack(side=tk.LEFT, padx=5)
-        
-        delete_button = ttk.Button(action_frame, text="Delete Rule", 
-                                  command=self._delete_rule)
+        delete_button = ttk.Button(action_frame, text="Delete", command=self._delete_rule)
         delete_button.pack(side=tk.LEFT, padx=5)
-        
-        duplicate_button = ttk.Button(action_frame, text="Duplicate", 
-                                     command=self._duplicate_rule)
+        duplicate_button = ttk.Button(action_frame, text="Duplicate", command=self._duplicate_rule)
         duplicate_button.pack(side=tk.LEFT, padx=5)
-        
+
+
         # Rule state controls
         state_frame = ttk.Frame(rules_frame)
-        state_frame.pack(fill=tk.X, pady=5)
-        
-        enable_all_button = ttk.Button(state_frame, text="Enable All", 
-                                      command=self._enable_all_rules)
-        enable_all_button.pack(side=tk.LEFT, padx=5)
-        
-        disable_all_button = ttk.Button(state_frame, text="Disable All", 
-                                       command=self._disable_all_rules)
+        state_frame.grid(row=3, column=0, sticky='ew', pady=5)
+        enable_all_button = ttk.Button(state_frame, text="Enable All", command=self._enable_all_rules)
+        enable_all_button.pack(side=tk.LEFT, padx=(0, 5))
+        disable_all_button = ttk.Button(state_frame, text="Disable All", command=self._disable_all_rules)
         disable_all_button.pack(side=tk.LEFT, padx=5)
-        
+
         # Move up/down buttons
         move_frame = ttk.Frame(rules_frame)
-        move_frame.pack(fill=tk.X, pady=5)
-        
-        move_up_button = ttk.Button(move_frame, text="Move Up", 
-                                   command=self._move_rule_up)
-        move_up_button.pack(side=tk.LEFT, padx=5)
-        
-        move_down_button = ttk.Button(move_frame, text="Move Down", 
-                                     command=self._move_rule_down)
+        move_frame.grid(row=4, column=0, sticky='ew', pady=5)
+        move_up_button = ttk.Button(move_frame, text="Move Up", command=self._move_rule_up)
+        move_up_button.pack(side=tk.LEFT, padx=(0, 5))
+        move_down_button = ttk.Button(move_frame, text="Move Down", command=self._move_rule_down)
         move_down_button.pack(side=tk.LEFT, padx=5)
-        
-        # Right panel - Rule details
-        right_frame = ttk.Frame(self.paned_window)
+
+
+        # --- Right panel - Rule details ---
+        right_frame = ttk.Frame(self.paned_window, padding=5)
         self.paned_window.add(right_frame, weight=2)
-        
+        right_frame.grid_rowconfigure(0, weight=1)
+        right_frame.grid_columnconfigure(0, weight=1)
+
         details_frame = ttk.LabelFrame(right_frame, text="Rule Details", padding=(10, 5))
-        details_frame.pack(fill=tk.BOTH, expand=True)
-        
+        details_frame.grid(row=0, column=0, sticky='nsew')
+        details_frame.grid_rowconfigure(0, weight=1)
+        details_frame.grid_columnconfigure(0, weight=1)
+
         # Rule details scroll container
         canvas = tk.Canvas(details_frame)
         scrollbar = ttk.Scrollbar(details_frame, orient="vertical", command=canvas.yview)
-        
-        self.details_content = ttk.Frame(canvas)
+
+        self.details_content = ttk.Frame(canvas, padding=5) # Add padding to content
         self.details_content.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-        
+
         canvas.create_window((0, 0), window=self.details_content, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
+
+        canvas.grid(row=0, column=0, sticky='nsew')
+        scrollbar.grid(row=0, column=1, sticky='ns')
+
+        # Configure grid for details_content
+        self.details_content.grid_columnconfigure(1, weight=1) # Make entries/text expand
+        # Row weights configured below
+
+        details_row = 0
+
         # Rule name
-        name_frame = ttk.Frame(self.details_content)
-        name_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(name_frame, text="Rule Name:", width=12).pack(side=tk.LEFT)
-        
+        ttk.Label(self.details_content, text="Rule Name:").grid(row=details_row, column=0, sticky='w', pady=2)
         self.rule_name_var = tk.StringVar()
-        self.rule_name_entry = ttk.Entry(name_frame, textvariable=self.rule_name_var, width=40)
-        self.rule_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
+        self.rule_name_entry = ttk.Entry(self.details_content, textvariable=self.rule_name_var)
+        self.rule_name_entry.grid(row=details_row, column=1, sticky='ew', pady=2)
+        details_row += 1
+
         # Enabled checkbox
-        enabled_frame = ttk.Frame(self.details_content)
-        enabled_frame.pack(fill=tk.X, pady=5)
-        
         self.enabled_var = tk.BooleanVar(value=True)
         enabled_check = ttk.Checkbutton(
-            enabled_frame, 
-            text="Enabled", 
+            self.details_content,
+            text="Enabled",
             variable=self.enabled_var,
             command=self._update_current_rule
         )
-        enabled_check.pack(side=tk.LEFT)
-        
+        enabled_check.grid(row=details_row, column=0, columnspan=2, sticky='w', pady=2)
+        details_row += 1
+
         # Target selector
         target_frame = ttk.Frame(self.details_content)
-        target_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(target_frame, text="Target:", width=12).pack(side=tk.LEFT)
-        
+        target_frame.grid(row=details_row, column=0, columnspan=2, sticky='ew', pady=2)
+        ttk.Label(target_frame, text="Target:").pack(side=tk.LEFT, padx=(0, 10))
         self.target_var = tk.StringVar(value="files")
         ttk.Radiobutton(target_frame, text="Files", variable=self.target_var, value="files",
-                      command=self._update_current_rule).pack(side=tk.LEFT)
+                      command=self._update_current_rule).pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(target_frame, text="Directories", variable=self.target_var, value="dirs",
-                      command=self._update_current_rule).pack(side=tk.LEFT)
-        
+                      command=self._update_current_rule).pack(side=tk.LEFT, padx=5)
+        details_row += 1
+
         # Subfolders checkbox
-        subfolder_frame = ttk.Frame(self.details_content)
-        subfolder_frame.pack(fill=tk.X, pady=5)
-        
         self.subfolders_var = tk.BooleanVar(value=True)
         subfolder_check = ttk.Checkbutton(
-            subfolder_frame, 
-            text="Include Subfolders", 
+            self.details_content,
+            text="Include Subfolders",
             variable=self.subfolders_var,
             command=self._update_current_rule
         )
-        subfolder_check.pack(side=tk.LEFT)
-        
+        subfolder_check.grid(row=details_row, column=0, columnspan=2, sticky='w', pady=2)
+        details_row += 1
+
         # Locations
         locations_frame = ttk.LabelFrame(self.details_content, text="Locations", padding=(5, 5))
-        locations_frame.pack(fill=tk.X, pady=5)
-        
-        self.locations_text = tk.Text(locations_frame, height=3, width=40, wrap=tk.WORD)
-        self.locations_text.pack(fill=tk.X, expand=True, pady=5)
+        locations_frame.grid(row=details_row, column=0, columnspan=2, sticky='nsew', pady=5)
+        locations_frame.grid_columnconfigure(0, weight=1)
+        locations_frame.grid_rowconfigure(0, weight=1) # Make text expand slightly
+        # self.details_content.grid_rowconfigure(details_row, weight=1) # Give some weight
+
+        default_font = font.nametofont("TkTextFont")
+        self.locations_text = tk.Text(locations_frame, height=3, width=40, wrap=tk.WORD, font=default_font)
+        self.locations_text.grid(row=0, column=0, sticky='nsew', pady=(0, 5))
         self.locations_text.bind("<KeyRelease>", self._on_locations_changed)
-        
-        locations_note = ttk.Label(locations_frame, 
-                                text="(One path per line. Use absolute paths like /home/user/Documents or ~/Documents)")
-        locations_note.pack(anchor=tk.W)
-        
+
+        locations_note = ttk.Label(locations_frame,
+                                text="(One path per line. Use absolute paths like /home/user/Documents or ~/Documents)",
+                                style="secondary.TLabel") # Use a secondary style if available
+        locations_note.grid(row=1, column=0, sticky='w')
+        details_row += 1
+
         # Filter mode
         filter_mode_frame = ttk.Frame(self.details_content)
-        filter_mode_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(filter_mode_frame, text="Filter Mode:", width=12).pack(side=tk.LEFT)
-        
+        filter_mode_frame.grid(row=details_row, column=0, columnspan=2, sticky='ew', pady=2)
+        ttk.Label(filter_mode_frame, text="Filter Mode:").pack(side=tk.LEFT, padx=(0, 10))
         self.filter_mode_var = tk.StringVar(value="all")
         ttk.Radiobutton(filter_mode_frame, text="All", variable=self.filter_mode_var, value="all",
-                      command=self._update_current_rule).pack(side=tk.LEFT)
+                      command=self._update_current_rule).pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(filter_mode_frame, text="Any", variable=self.filter_mode_var, value="any",
-                      command=self._update_current_rule).pack(side=tk.LEFT)
+                      command=self._update_current_rule).pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(filter_mode_frame, text="None", variable=self.filter_mode_var, value="none",
-                      command=self._update_current_rule).pack(side=tk.LEFT)
-        
+                      command=self._update_current_rule).pack(side=tk.LEFT, padx=5)
+        details_row += 1
+
         # Filters
         filters_frame = ttk.LabelFrame(self.details_content, text="Filters", padding=(5, 5))
-        filters_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
+        filters_frame.grid(row=details_row, column=0, columnspan=2, sticky='nsew', pady=5)
+        filters_frame.grid_columnconfigure(0, weight=1)
+        filters_frame.grid_rowconfigure(0, weight=1) # Make list expand
+        self.details_content.grid_rowconfigure(details_row, weight=1) # Give weight
+
         # Filter list with scrollbar
         filter_list_frame = ttk.Frame(filters_frame)
-        filter_list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        filter_scrollbar = ttk.Scrollbar(filter_list_frame)
-        filter_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.filters_list = tk.Listbox(filter_list_frame, yscrollcommand=filter_scrollbar.set, height=6)
-        self.filters_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        filter_list_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 5))
+        filter_list_frame.grid_rowconfigure(0, weight=1)
+        filter_list_frame.grid_columnconfigure(0, weight=1)
+
+        filter_scrollbar = ttk.Scrollbar(filter_list_frame, orient=tk.VERTICAL)
+        filter_scrollbar.grid(row=0, column=1, sticky='ns')
+
+        self.filters_list = tk.Listbox(filter_list_frame, yscrollcommand=filter_scrollbar.set, height=6, font=default_font)
+        self.filters_list.grid(row=0, column=0, sticky='nsew')
         filter_scrollbar.config(command=self.filters_list.yview)
-        
+
         # Filter buttons
         filter_buttons = ttk.Frame(filters_frame)
-        filter_buttons.pack(fill=tk.X)
-        
-        self.add_filter_button = ttk.Button(filter_buttons, text="Add Filter", 
-                                           command=self._add_filter)
-        self.add_filter_button.pack(side=tk.LEFT, padx=5)
-        
-        self.edit_filter_button = ttk.Button(filter_buttons, text="Edit Filter", 
-                                           command=self._edit_filter)
+        filter_buttons.grid(row=1, column=0, sticky='ew')
+        self.add_filter_button = ttk.Button(filter_buttons, text="Add", command=self._add_filter)
+        self.add_filter_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.edit_filter_button = ttk.Button(filter_buttons, text="Edit", command=self._edit_filter)
         self.edit_filter_button.pack(side=tk.LEFT, padx=5)
-        
-        self.remove_filter_button = ttk.Button(filter_buttons, text="Remove Filter", 
-                                             command=self._remove_filter)
+        self.remove_filter_button = ttk.Button(filter_buttons, text="Remove", command=self._remove_filter)
         self.remove_filter_button.pack(side=tk.LEFT, padx=5)
-        
+        details_row += 1
+
         # Actions
         actions_frame = ttk.LabelFrame(self.details_content, text="Actions", padding=(5, 5))
-        actions_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
+        actions_frame.grid(row=details_row, column=0, columnspan=2, sticky='nsew', pady=5)
+        actions_frame.grid_columnconfigure(0, weight=1)
+        actions_frame.grid_rowconfigure(0, weight=1) # Make list expand
+        self.details_content.grid_rowconfigure(details_row, weight=1) # Give weight
+
         # Action list with scrollbar
         action_list_frame = ttk.Frame(actions_frame)
-        action_list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        action_scrollbar = ttk.Scrollbar(action_list_frame)
-        action_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.actions_list = tk.Listbox(action_list_frame, yscrollcommand=action_scrollbar.set, height=6)
-        self.actions_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        action_list_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 5))
+        action_list_frame.grid_rowconfigure(0, weight=1)
+        action_list_frame.grid_columnconfigure(0, weight=1)
+
+        action_scrollbar = ttk.Scrollbar(action_list_frame, orient=tk.VERTICAL)
+        action_scrollbar.grid(row=0, column=1, sticky='ns')
+
+        self.actions_list = tk.Listbox(action_list_frame, yscrollcommand=action_scrollbar.set, height=6, font=default_font)
+        self.actions_list.grid(row=0, column=0, sticky='nsew')
         action_scrollbar.config(command=self.actions_list.yview)
-        
+
         # Action buttons
         action_buttons = ttk.Frame(actions_frame)
-        action_buttons.pack(fill=tk.X)
-        
-        self.add_action_button = ttk.Button(action_buttons, text="Add Action", 
-                                           command=self._add_action)
-        self.add_action_button.pack(side=tk.LEFT, padx=5)
-        
-        self.edit_action_button = ttk.Button(action_buttons, text="Edit Action", 
-                                           command=self._edit_action)
+        action_buttons.grid(row=1, column=0, sticky='ew')
+        self.add_action_button = ttk.Button(action_buttons, text="Add", command=self._add_action)
+        self.add_action_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.edit_action_button = ttk.Button(action_buttons, text="Edit", command=self._edit_action)
         self.edit_action_button.pack(side=tk.LEFT, padx=5)
-        
-        self.remove_action_button = ttk.Button(action_buttons, text="Remove Action", 
-                                             command=self._remove_action)
+        self.remove_action_button = ttk.Button(action_buttons, text="Remove", command=self._remove_action)
         self.remove_action_button.pack(side=tk.LEFT, padx=5)
-        
+        details_row += 1
+
         # Save button
         save_frame = ttk.Frame(self.details_content)
-        save_frame.pack(fill=tk.X, pady=10)
-        
-        save_button = ttk.Button(save_frame, text="Save Rule", 
-                                command=self._save_rule_details)
-        save_button.pack(side=tk.RIGHT, padx=5)
-        
+        save_frame.grid(row=details_row, column=0, columnspan=2, sticky='e', pady=(10, 0))
+        save_button = ttk.Button(save_frame, text="Save Rule Changes", command=self._save_rule_details)
+        save_button.pack() # Simple pack is fine here
+        details_row += 1
+
         # Initialize the details panel
         self._clear_rule_details()
     

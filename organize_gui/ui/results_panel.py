@@ -7,7 +7,7 @@ results of the organization process, including filtering and statistics.
 
 import os
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, font
 import csv
 import datetime
 import json
@@ -25,183 +25,178 @@ class ResultsPanel(ttk.Frame):
         
         # Create the UI components
         self._create_widgets()
-    
+
     def _create_widgets(self):
-        """Create the UI components for the results panel."""
-        # Main layout container
-        main_frame = ttk.Frame(self, padding=(10, 10))
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
+        """Create the UI components for the results panel using grid."""
+        # Configure main frame grid
+        self.grid_rowconfigure(3, weight=1) # Results frame should expand
+        self.grid_columnconfigure(0, weight=1)
+
+        row_index = 0
+
         # Summary frame
-        summary_frame = ttk.LabelFrame(main_frame, text="Summary", padding=(10, 5))
-        summary_frame.pack(fill=tk.X, pady=5)
-        
+        summary_frame = ttk.LabelFrame(self, text="Summary", padding=(10, 5))
+        summary_frame.grid(row=row_index, column=0, sticky='ew', padx=10, pady=5)
+        summary_frame.grid_columnconfigure(0, weight=1) # Make inner grid expand
+
         # Create grid for summary information
         summary_grid = ttk.Frame(summary_frame)
-        summary_grid.pack(fill=tk.X, pady=5)
-        
+        summary_grid.grid(row=0, column=0, sticky='ew', pady=5)
+        # Configure columns for even spacing (optional)
+        for i in range(6):
+            summary_grid.grid_columnconfigure(i, weight=1)
+
         # Row 1: Basic counts
         ttk.Label(summary_grid, text="Total Files:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
         self.total_files_var = tk.StringVar(value="0")
         ttk.Label(summary_grid, textvariable=self.total_files_var).grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
-        
+
         ttk.Label(summary_grid, text="Files Moved:").grid(row=0, column=2, sticky=tk.W, padx=5, pady=2)
         self.files_moved_var = tk.StringVar(value="0")
         ttk.Label(summary_grid, textvariable=self.files_moved_var).grid(row=0, column=3, sticky=tk.W, padx=5, pady=2)
-        
+
         ttk.Label(summary_grid, text="Files Skipped:").grid(row=0, column=4, sticky=tk.W, padx=5, pady=2)
         self.files_skipped_var = tk.StringVar(value="0")
         ttk.Label(summary_grid, textvariable=self.files_skipped_var).grid(row=0, column=5, sticky=tk.W, padx=5, pady=2)
-        
+
         # Row 2: Additional stats
         ttk.Label(summary_grid, text="Rules Applied:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
         self.rules_applied_var = tk.StringVar(value="0")
         ttk.Label(summary_grid, textvariable=self.rules_applied_var).grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
-        
+
         ttk.Label(summary_grid, text="Duplicates Found:").grid(row=1, column=2, sticky=tk.W, padx=5, pady=2)
         self.duplicates_var = tk.StringVar(value="0")
         ttk.Label(summary_grid, textvariable=self.duplicates_var).grid(row=1, column=3, sticky=tk.W, padx=5, pady=2)
-        
+
         ttk.Label(summary_grid, text="Errors:").grid(row=1, column=4, sticky=tk.W, padx=5, pady=2)
         self.errors_var = tk.StringVar(value="0")
         ttk.Label(summary_grid, textvariable=self.errors_var).grid(row=1, column=5, sticky=tk.W, padx=5, pady=2)
-        
+
         # Row 3: Last run information
         ttk.Label(summary_grid, text="Last Run:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
         self.last_run_var = tk.StringVar(value="Never")
         ttk.Label(summary_grid, textvariable=self.last_run_var).grid(row=2, column=1, columnspan=5, sticky=tk.W, padx=5, pady=2)
-        
+        row_index += 1
+
         # Category breakdown frame
-        category_frame = ttk.LabelFrame(main_frame, text="Category Breakdown", padding=(10, 5))
-        category_frame.pack(fill=tk.X, pady=5)
-        
+        category_frame = ttk.LabelFrame(self, text="Category Breakdown", padding=(10, 5))
+        category_frame.grid(row=row_index, column=0, sticky='ew', padx=10, pady=5)
+        category_frame.grid_columnconfigure(1, weight=1) # Make progress bars expand
+
         # Horizontal progress bars for each category
         self.category_frames = {}
         self.category_vars = {}
         self.category_labels = {}
         self.category_progress = {}
-        
-        # Create a frame for each category
-        categories = [
-            ("Documents", "#4e89ae"),
-            ("Media", "#43658b"),
-            ("Development", "#ed6663"),
-            ("Archives", "#ffa372"),
-            ("Applications", "#a0c1b8"),
-            ("Other", "#f39189"),
-            ("Duplicates", "#ffbd69"),
-            ("Temporary", "#b0a565")
+
+        # Define categories (consider making this dynamic later)
+        self.categories = [
+            "Documents", "Media", "Development", "Archives",
+            "Applications", "Other", "Duplicates", "Temporary"
         ]
-        
-        for i, (category, color) in enumerate(categories):
-            # Create frame
-            cat_frame = ttk.Frame(category_frame)
-            cat_frame.pack(fill=tk.X, pady=2)
-            
+
+        for i, category in enumerate(self.categories):
             # Create label and progress bar
-            label = ttk.Label(cat_frame, text=f"{category}:", width=15)
-            label.pack(side=tk.LEFT, padx=5)
-            
+            label = ttk.Label(category_frame, text=f"{category}:", width=15)
+            label.grid(row=i, column=0, sticky=tk.W, padx=5, pady=1)
+
             var = tk.IntVar(value=0)
             progress = ttk.Progressbar(
-                cat_frame, 
-                orient=tk.HORIZONTAL, 
-                length=100, 
+                category_frame,
+                orient=tk.HORIZONTAL,
                 mode='determinate',
                 variable=var
             )
-            progress.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-            
-            count_label = ttk.Label(cat_frame, text="0", width=8)
-            count_label.pack(side=tk.LEFT, padx=5)
-            
+            progress.grid(row=i, column=1, sticky=tk.EW, padx=5, pady=1)
+
+            count_label = ttk.Label(category_frame, text="0", width=8, anchor=tk.E)
+            count_label.grid(row=i, column=2, sticky=tk.E, padx=5, pady=1)
+
             # Store references
-            self.category_frames[category] = cat_frame
             self.category_vars[category] = var
             self.category_labels[category] = count_label
             self.category_progress[category] = progress
-            
-            # Set progress bar color (using style tags)
-            style_name = f"{category}.Horizontal.TProgressbar"
-            style = ttk.Style()
-            style.configure(style_name, background=color)
-            progress.configure(style=style_name)
-        
+            # Note: Removed hardcoded color styling, rely on theme or add theme-aware styling later if needed
+        row_index += 1
+
         # Filter frame
-        filter_frame = ttk.Frame(main_frame)
-        filter_frame.pack(fill=tk.X, pady=5)
-        
-        # Search filter
-        ttk.Label(filter_frame, text="Filter:").pack(side=tk.LEFT, padx=(0, 5))
+        filter_frame = ttk.Frame(self)
+        filter_frame.grid(row=row_index, column=0, sticky='ew', padx=10, pady=5)
+        filter_frame.grid_columnconfigure(1, weight=1) # Make filter entry expand
+
+        ttk.Label(filter_frame, text="Filter:").grid(row=0, column=0, padx=(0, 5))
         self.filter_var = tk.StringVar()
-        self.filter_var.trace("w", self._apply_filters)
-        filter_entry = ttk.Entry(filter_frame, textvariable=self.filter_var, width=30)
-        filter_entry.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Category filter
-        ttk.Label(filter_frame, text="Category:").pack(side=tk.LEFT, padx=(0, 5))
+        self.filter_var.trace_add("write", self._apply_filters) # Use trace_add
+        filter_entry = ttk.Entry(filter_frame, textvariable=self.filter_var)
+        filter_entry.grid(row=0, column=1, sticky='ew', padx=(0, 10))
+
+        ttk.Label(filter_frame, text="Category:").grid(row=0, column=2, padx=(0, 5))
         self.category_filter_var = tk.StringVar(value="All")
-        category_values = ["All"] + [cat for cat, _ in categories]
-        category_combo = ttk.Combobox(filter_frame, textvariable=self.category_filter_var, 
+        category_values = ["All"] + self.categories
+        category_combo = ttk.Combobox(filter_frame, textvariable=self.category_filter_var,
                                      values=category_values, state="readonly", width=15)
-        category_combo.pack(side=tk.LEFT, padx=(0, 10))
+        category_combo.grid(row=0, column=3, padx=(0, 10))
         category_combo.bind("<<ComboboxSelected>>", self._apply_filters)
-        
-        # Status filter
-        ttk.Label(filter_frame, text="Status:").pack(side=tk.LEFT, padx=(0, 5))
+
+        ttk.Label(filter_frame, text="Status:").grid(row=0, column=4, padx=(0, 5))
         self.status_var = tk.StringVar(value="All")
         statuses = ["All", "Moved", "Skipped", "Error"]
-        status_combo = ttk.Combobox(filter_frame, textvariable=self.status_var, 
+        status_combo = ttk.Combobox(filter_frame, textvariable=self.status_var,
                                    values=statuses, state="readonly", width=10)
-        status_combo.pack(side=tk.LEFT)
+        status_combo.grid(row=0, column=5)
         status_combo.bind("<<ComboboxSelected>>", self._apply_filters)
-        
+        row_index += 1
+
         # Results frame with tree view
-        results_frame = ttk.LabelFrame(main_frame, text="Results", padding=(10, 5))
-        results_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
+        results_frame = ttk.LabelFrame(self, text="Results", padding=(10, 5))
+        results_frame.grid(row=row_index, column=0, sticky='nsew', padx=10, pady=5)
+        results_frame.grid_rowconfigure(0, weight=1)
+        results_frame.grid_columnconfigure(0, weight=1)
+
         # Create tree view with scrollbars
         tree_frame = ttk.Frame(results_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Vertical scrollbar
-        vscrollbar = ttk.Scrollbar(tree_frame)
-        vscrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Horizontal scrollbar
+        tree_frame.grid(row=0, column=0, sticky='nsew')
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        vscrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL)
+        vscrollbar.grid(row=0, column=1, sticky='ns')
+
         hscrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL)
-        hscrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # Tree view
+        hscrollbar.grid(row=1, column=0, sticky='ew')
+
         self.tree = ttk.Treeview(
             tree_frame,
             columns=("source", "destination", "rule", "status"),
             yscrollcommand=vscrollbar.set,
-            xscrollcommand=hscrollbar.set
+            xscrollcommand=hscrollbar.set,
+            selectmode="browse" # Only allow single selection
         )
-        self.tree.pack(fill=tk.BOTH, expand=True)
-        
+        self.tree.grid(row=0, column=0, sticky='nsew')
+
         vscrollbar.config(command=self.tree.yview)
         hscrollbar.config(command=self.tree.xview)
-        
+
         # Configure tree columns
-        self.tree.column("#0", width=50, minwidth=50)
-        self.tree.column("source", width=250, minwidth=150)
-        self.tree.column("destination", width=250, minwidth=150)
-        self.tree.column("rule", width=150, minwidth=100)
-        self.tree.column("status", width=80, minwidth=80)
-        
-        self.tree.heading("#0", text="#")
+        self.tree.column("#0", width=50, minwidth=40, stretch=tk.NO, anchor=tk.E)
+        self.tree.column("source", width=300, minwidth=150, stretch=tk.YES)
+        self.tree.column("destination", width=300, minwidth=150, stretch=tk.YES)
+        self.tree.column("rule", width=150, minwidth=100, stretch=tk.NO)
+        self.tree.column("status", width=80, minwidth=70, stretch=tk.NO)
+
+        self.tree.heading("#0", text="#", anchor=tk.E)
         self.tree.heading("source", text="Source Path", command=lambda: self._sort_column("source", False))
         self.tree.heading("destination", text="Destination Path", command=lambda: self._sort_column("destination", False))
         self.tree.heading("rule", text="Rule Applied", command=lambda: self._sort_column("rule", False))
         self.tree.heading("status", text="Status", command=lambda: self._sort_column("status", False))
-        
-        # Tag configurations for status colors
-        self.tree.tag_configure("moved", background="#e6ffe6")  # Light green
-        self.tree.tag_configure("skipped", background="#ffffcc")  # Light yellow
-        self.tree.tag_configure("error", background="#ffe6e6")  # Light red
-        
+
+        # Tag configurations for status colors (using theme-aware foreground)
+        style = ttk.Style()
+        style.map("Treeview", foreground=self._fixed_map("foreground")) # Fix for theme change issue
+        self.tree.tag_configure("moved", foreground="green")
+        self.tree.tag_configure("skipped", foreground="orange")
+        self.tree.tag_configure("error", foreground="red")
+
         # Add context menu to tree
         self.context_menu = tk.Menu(self.tree, tearoff=0)
         self.context_menu.add_command(label="Copy Source Path", command=self._copy_source_path)
@@ -209,70 +204,87 @@ class ResultsPanel(ttk.Frame):
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Open Source Location", command=self._open_source_location)
         self.context_menu.add_command(label="Open Destination Location", command=self._open_destination_location)
-        
-        self.tree.bind("<Button-3>", self._show_context_menu)
+
+        self.tree.bind("<Button-3>", self._show_context_menu) # Standard right-click
+        self.tree.bind("<Button-2>", self._show_context_menu) # macOS Control-click
         self.tree.bind("<Double-1>", self._show_file_details)
-        
-        # Action buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=5)
-        
+        row_index += 1
+
+        # Action buttons (bottom)
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=row_index, column=0, sticky='ew', padx=10, pady=(5, 10))
+        button_frame.grid_columnconfigure(3, weight=1) # Push clear button right
+
         refresh_button = ttk.Button(button_frame, text="Refresh", command=self._refresh_results)
-        refresh_button.pack(side=tk.LEFT, padx=5)
-        
+        refresh_button.grid(row=0, column=0, padx=(0, 5))
+
         export_button = ttk.Button(button_frame, text="Export Results...", command=self._export_results)
-        export_button.pack(side=tk.LEFT, padx=5)
-        
+        export_button.grid(row=0, column=1, padx=5)
+
         visualize_button = ttk.Button(button_frame, text="Visualize Results", command=self._visualize_results)
-        visualize_button.pack(side=tk.LEFT, padx=5)
-        
+        visualize_button.grid(row=0, column=2, padx=5)
+
         clear_button = ttk.Button(button_frame, text="Clear Results", command=self._clear_results)
-        clear_button.pack(side=tk.RIGHT, padx=5)
-    
+        clear_button.grid(row=0, column=3, sticky='e') # Push to right
+        row_index += 1
+    # Helper function to fix ttk style mapping issue on theme change
+    def _fixed_map(self, option):
+        style = ttk.Style()
+        return [elm for elm in style.map("Treeview", query_opt=option) if elm[:2] != ("!disabled", "!selected")]
+
     def _apply_filters(self, *args):
         """Apply filters to the results view."""
         filter_text = self.filter_var.get().lower()
         category = self.category_filter_var.get()
         status = self.status_var.get()
-        
+
         # Clear the tree
         self.tree.delete(*self.tree.get_children())
-        
+
         # Add filtered results
         count = 0
         for result in self.results:
-            # Skip items that don't match the filter
-            if filter_text and not (
-                filter_text in result['source'].lower() or 
-                filter_text in result.get('destination', '').lower() or 
-                filter_text in result.get('rule', '').lower()
-            ):
+            source_lower = result.get('source', '').lower()
+            dest_lower = result.get('destination', '').lower()
+            rule_lower = result.get('rule', '').lower()
+            status_lower = result.get('status', '').lower()
+
+            # Filter text match
+            text_match = not filter_text or (
+                filter_text in source_lower or
+                filter_text in dest_lower or
+                filter_text in rule_lower
+            )
+            if not text_match:
                 continue
-            
-            # Skip items that don't match the category
+
+            # Category match
             if category != "All":
                 result_category = self._get_result_category(result)
                 if result_category != category:
                     continue
-            
-            # Skip items that don't match the status
-            if status != "All" and result.get('status', '') != status:
+
+            # Status match
+            if status != "All" and status_lower != status.lower():
                 continue
-            
+
             # Add the item to the tree
             count += 1
             status_text = result.get('status', '')
             rule_text = result.get('rule', '')
-            
+
+            # Determine tag based on status
+            tag = status_text.lower() if status_text else 'unknown'
+
             self.tree.insert(
-                "", "end", text=str(count),
+                "", "end", text=str(count), # Use count as item text
                 values=(
-                    result['source'],
+                    result.get('source', ''),
                     result.get('destination', ''),
                     rule_text,
                     status_text
                 ),
-                tags=(status_text.lower(),)
+                tags=(tag,)
             )
     
     def _sort_column(self, column, reverse):
@@ -292,36 +304,27 @@ class ResultsPanel(ttk.Frame):
         
         # Switch the heading to display the opposite sort order
         self.tree.heading(column, command=lambda: self._sort_column(column, not reverse))
-    
     def _get_result_category(self, result):
         """Determine the category of a result based on its destination path."""
         dest = result.get('destination', '')
-        
+        status = result.get('status', '')
+
+        if status == "Error":
+            return "Other" # Treat errors as 'Other' for categorization
+
         if not dest:
             return "Other"
-        
-        dest_lower = dest.lower()
-        
-        if '/documents/' in dest_lower or 'organized/documents' in dest_lower:
-            return "Documents"
-        elif '/media/' in dest_lower or 'organized/media' in dest_lower:
-            return "Media"
-        elif '/development/' in dest_lower or 'organized/development' in dest_lower:
-            return "Development"
-        elif '/archives/' in dest_lower or 'organized/archives' in dest_lower:
-            return "Archives"
-        elif '/applications/' in dest_lower or 'organized/applications' in dest_lower:
-            return "Applications"
-        elif '/duplicates/' in dest_lower or 'cleanup/duplicates' in dest_lower:
-            return "Duplicates"
-        elif '/temporary/' in dest_lower or 'cleanup/temporary' in dest_lower:
-            return "Temporary"
-        elif '/cleanup/' in dest_lower or 'cleanup/' in dest_lower:
-            return "Temporary"
-        elif result.get('status', '') == "Error":
-            return "Other"
-        else:
-            return "Other"
+
+        # Normalize path and check against defined categories
+        dest_norm = dest.replace('\\', '/').lower()
+        for category in self.categories:
+            cat_lower = category.lower()
+            # Check common patterns like /Category/ or /Organized/Category/ or /Cleanup/Category/
+            if f'/{cat_lower}/' in dest_norm or f'/organized/{cat_lower}/' in dest_norm or f'/cleanup/{cat_lower}/' in dest_norm:
+                 return category
+
+        # Fallback
+        return "Other"
     
     def _show_context_menu(self, event):
         """Show the context menu on right click."""
@@ -331,44 +334,36 @@ class ResultsPanel(ttk.Frame):
             self.tree.selection_set(item)
             # Show the context menu
             self.context_menu.post(event.x_root, event.y_root)
-    
     def _copy_source_path(self):
         """Copy the source path of the selected item to the clipboard."""
-        selected = self.tree.selection()
-        if selected:
-            values = self.tree.item(selected[0], 'values')
-            if values:
-                self.clipboard_clear()
-                self.clipboard_append(values[0])
-                messagebox.showinfo("Copy", "Source path copied to clipboard")
-    
+        selected_item = self.tree.selection()
+        if not selected_item: return
+        values = self.tree.item(selected_item[0], 'values')
+        if values and len(values) > 0:
+            self._copy_to_clipboard(values[0]) # Use helper
     def _copy_destination_path(self):
         """Copy the destination path of the selected item to the clipboard."""
-        selected = self.tree.selection()
-        if selected:
-            values = self.tree.item(selected[0], 'values')
-            if values and len(values) > 1:
-                self.clipboard_clear()
-                self.clipboard_append(values[1])
-                messagebox.showinfo("Copy", "Destination path copied to clipboard")
-    
+        selected_item = self.tree.selection()
+        if not selected_item: return
+        values = self.tree.item(selected_item[0], 'values')
+        if values and len(values) > 1 and values[1]: # Check if destination exists
+            self._copy_to_clipboard(values[1]) # Use helper
     def _open_source_location(self):
         """Open the source location in the file explorer."""
-        selected = self.tree.selection()
-        if selected:
-            values = self.tree.item(selected[0], 'values')
-            if values:
-                path = values[0]
-                self._open_file_location(path)
-    
+        selected_item = self.tree.selection()
+        if not selected_item: return
+        values = self.tree.item(selected_item[0], 'values')
+        if values and len(values) > 0:
+            path = values[0]
+            self._open_file_location(path)
     def _open_destination_location(self):
         """Open the destination location in the file explorer."""
-        selected = self.tree.selection()
-        if selected:
-            values = self.tree.item(selected[0], 'values')
-            if values and len(values) > 1:
-                path = values[1]
-                self._open_file_location(path)
+        selected_item = self.tree.selection()
+        if not selected_item: return
+        values = self.tree.item(selected_item[0], 'values')
+        if values and len(values) > 1 and values[1]: # Check if destination exists
+            path = values[1]
+            self._open_file_location(path)
     
     def _open_file_location(self, path):
         """Open a file location in the system file explorer."""
@@ -531,12 +526,15 @@ class ResultsPanel(ttk.Frame):
                 close_button = ttk.Button(button_frame, text="Close", 
                                         command=details_dialog.destroy)
                 close_button.pack(side=tk.RIGHT, padx=5)
-    
     def _copy_to_clipboard(self, text):
-        """Copy text to clipboard and show a tooltip."""
-        self.clipboard_clear()
-        self.clipboard_append(text)
-        messagebox.showinfo("Copy", "Path copied to clipboard")
+        """Copy text to clipboard."""
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            # Optionally show a brief status message without a dialog
+            # print("Path copied to clipboard")
+        except tk.TclError:
+             messagebox.showwarning("Copy Failed", "Could not access clipboard.")
     
     def _format_size(self, size_bytes):
         """Format a size in bytes to a human-readable string."""
@@ -582,38 +580,34 @@ class ResultsPanel(ttk.Frame):
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh results: {str(e)}")
-    
     def _export_results(self):
-        """Export the results to a CSV file."""
-        if not self.results:
-            messagebox.showinfo("No Results", "There are no results to export.")
+        """Export the currently displayed (filtered) results to a CSV file."""
+        # Get items currently displayed in the tree
+        tree_items = self.tree.get_children()
+        if not tree_items:
+            messagebox.showinfo("No Results", "There are no results currently displayed to export.")
             return
-        
+
         # Ask for file path
         filetypes = [("CSV files", "*.csv"), ("All files", "*.*")]
         filename = filedialog.asksaveasfilename(
-            title="Export Results", 
+            title="Export Displayed Results",
             filetypes=filetypes,
             defaultextension=".csv"
         )
-        
+
         if not filename:
             return
-        
+
         try:
-            with open(filename, 'w', newline='') as csvfile:
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile: # Add encoding
                 writer = csv.writer(csvfile)
-                # Write header
-                writer.writerow(["Source", "Destination", "Rule", "Status", "Category"])
-                # Write data
-                for result in self.results:
-                    writer.writerow([
-                        result['source'],
-                        result.get('destination', ''),
-                        result.get('rule', ''),
-                        result.get('status', ''),
-                        self._get_result_category(result)
-                    ])
+                # Write header matching tree columns
+                writer.writerow(["Source Path", "Destination Path", "Rule Applied", "Status"])
+                # Write data from tree
+                for item_id in tree_items:
+                    values = self.tree.item(item_id, 'values')
+                    writer.writerow(values)
             
             messagebox.showinfo("Export Successful", 
                               f"Results exported to {filename}")

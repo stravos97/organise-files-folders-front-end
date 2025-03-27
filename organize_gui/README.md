@@ -1,99 +1,112 @@
 # File Organization System Frontend
 
-A graphical user interface for the powerful [organize-tool](https://github.com/tfeldmann/organize) file organization system.
+This project provides a user-friendly graphical interface for the powerful [organize-tool](https://github.com/tfeldmann/organize) file organization system. Instead of writing YAML configuration files manually, you can organize your files through an intuitive interface.
 
-## Overview
+## Core Features
 
-This application provides a user-friendly interface to:
+The application lets you organize files visually by configuring source and destination directories, setting up rules, and previewing changes before they happen. When you run the organization process, you get real-time feedback about what's happening to your files.
 
-- Configure source and destination directories
-- Enable/disable specific organization rules
-- Run the organization process with visual feedback
-- Preview changes before execution with simulation mode
-- Schedule automatic organization runs
-- View and analyze organization results
+The frontend integrates with organize-tool to help you:
+- Set up source folders to scan and destination folders for organized files
+- Create and enable/disable organization rules through a visual interface
+- Preview all changes safely through simulation mode before running them
+- Schedule automatic organization to run at specific times
+- Track and analyze how your files were organized
 
-## Features
+## Getting Started
 
-- **Configuration Management**: Easily update source and destination paths
-- **Rule Management**: Enable/disable specific rules and view their details
-- **Preview Mode**: See what will happen before making any changes
-- **Detailed Results**: Track file movements and organization statistics
-- **Scheduling**: Set up automatic organization runs
+### Requirements
 
-## Installation
-
-### Prerequisites
-
+Before installing, make sure you have:
 - Python 3.6 or newer
-- organize-tool installed (pip install -U organize-tool)
+- The organize-tool (`pip install -U organize-tool`)
 - Tkinter (usually included with Python)
 
-### Setup
+### Installation
 
-1. Clone the repository:
+1. Get the code:
    ```bash
    git clone https://github.com/yourusername/organize-gui.git
    cd organize-gui
    ```
 
-2. Install with pip:
+2. Install it:
    ```bash
    pip install -e .
    ```
 
-   Or simply run the application with the provided script:
+   Or use the included launcher:
    ```bash
-   ./run.sh
+   ./run.sh  # On Linux/macOS
    ```
+   *(Note: A `run.bat` might be needed for Windows)*
 
-## Usage
+### Quick Usage Guide
 
-### Starting the Application
+1.  **Launch the application:**
+    ```bash
+    organize-gui
+    ```
+    Or use the script: `./run.sh`
 
-Launch the application by running:
+2.  **Configure your folders in the `Configuration` Tab:**
+    *   Choose which folders to scan for files (Source).
+    *   Select where organized files should go (Destination).
+    *   Load existing or Save your settings.
 
-```bash
-organize-gui
-```
+3.  **Set up rules in the `Rules` Tab:**
+    *   View rules loaded from your configuration.
+    *   Enable or disable rules using checkboxes.
+    *   *(Advanced: Edit rules directly via YAML or dedicated editors)*
 
-Or use the provided script:
+4.  **Test your setup in the `Preview & Run` Tab:**
+    *   Run a **Simulation** to see what *would* happen without moving files.
+    *   Check the log output to ensure files are targeted correctly.
+    *   Run the real **Organize** process when ready.
+    *   Schedule future runs if needed.
 
-```bash
-./run.sh
-```
+5.  **Review results in the `Results` Tab:**
+    *   See a summary and detailed list of what files moved where.
+    *   Check for any errors during the process.
+    *   Export reports if needed.
 
-### Configuration Tab
+## Project Architecture (Overview)
 
-1. Specify the source directory to scan for files
-2. Specify the destination base directory for organized files
-3. Load or save configurations
-4. View the directory structure that will be created
+The application uses a clean three-layer architecture to keep the code organized and maintainable:
 
-### Rules Tab
+*   **UI Layer (`ui/`)**: The interface built with Tkinter, including the main window and tabs for Configuration, Rules, Preview, and Results. See files like `ui/main_window.py`, `ui/config_panel.py`, `ui/rules_panel.py`, etc.
+*   **Core Layer (`core/`)**: The backend logic, handling configuration (`core/config_manager.py`), running `organize-tool` (`core/organize_runner.py`), and processing its output (`core/output_parser.py`).
+*   **Utils Layer (`utils/`)**: Common helper functions for tasks like path handling (`utils/path_helpers.py`) and input validation (`utils/validators.py`).
 
-1. Enable/disable specific organization rules
-2. Filter rules by category or search text
-3. View detailed information about each rule's:
-   - Source locations
-   - Filters
-   - Actions
+The entry point `app.py` initializes the application and connects these components.
 
-### Preview & Run Tab
+## How It Works (Overview)
 
-1. Run the organization in simulation mode to preview changes
-2. Run the actual organization process
-3. Schedule automated organization runs
-4. View real-time progress and output
+When you use the application, these components work together:
 
-### Results Tab
+1.  The **Configuration Tab** lets you set up paths, which are managed by the **Config Manager** in the core layer.
+2.  The **Rules Tab** shows your organization rules (read by the **Config Manager**) and lets you enable/disable them.
+3.  When you run a simulation or organization via the **Preview & Run Tab**:
+    *   The **Organize Runner** executes the actual `organize-tool` command.
+    *   The **Output Parser** processes the results from the command.
+    *   The interface updates to show you the log output and results.
+4.  After organization completes, the **Results Tab** displays a summary of what happened.
 
-1. See statistics about the organization run
-2. Filter and search through organized files
-3. Export results to CSV format
-4. View detailed information about each file movement
+## License
 
-## Architecture
+This project uses the MIT License - see the LICENSE file for details (if one exists in the repository).
+
+## Credits
+
+- [organize-tool](https://github.com/tfeldmann/organize) - The powerful organization engine that makes this possible.
+
+---
+
+## Advanced Details & Development
+
+This section provides in-depth technical information about the application's architecture, workflow, and development process.
+
+### Detailed Architecture
 
 The application is structured into distinct layers: UI, Core, and Utilities. It interacts with the external `organize-tool` command-line interface.
 
@@ -145,7 +158,7 @@ graph TD
 -   **Utils Layer (`utils/`)**: Provides common helper functions, such as path manipulation (`PathHelpers`) and input validation (`Validators`), used across different parts of the application.
 -   **`organize-tool` CLI**: The external command-line tool that performs the actual file organization based on the YAML configuration. The GUI acts as a frontend to this tool.
 
-## Workflow Example: Running Simulation
+### Detailed Workflow Example: Running Simulation
 
 This diagram shows the sequence of interactions when a user runs the simulation mode:
 
@@ -185,7 +198,7 @@ sequenceDiagram
 9.  The **OrganizeRunner** returns both the parsed results and the raw log output to the **PreviewPanel**.
 10. The **PreviewPanel** updates the UI to display the simulation results and logs to the **User**.
 
-## Codebase Structure & Component Interaction
+### Detailed Codebase Structure & Component Interaction
 
 The project follows a modular structure designed for separation of concerns:
 
@@ -239,25 +252,16 @@ organize_gui/
 
 This separation allows the UI to focus on presentation and user interaction, while the Core handles the logic of managing configurations and interacting with the external `organize-tool`. The Utils provide reusable functions to support both layers.
 
-## Customization
+### Customization
 
 The application is designed to be easily customizable:
 
-- Add new tabs or panels by extending the UI components
-- Add new validator functions for additional rules
-- Modify the directory structure in the ConfigManager
+- Add new tabs or panels by extending the UI components in the `ui/` directory.
+- Add new validator functions in `utils/validators.py` for additional input checks.
+- Modify or extend the `core/ConfigManager` to handle different configuration structures or defaults.
+- Enhance the `core/OutputParser` to extract more information from the `organize-tool` output.
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgements
-
-- [organize-tool](https://github.com/tfeldmann/organize) - The underlying tool that powers this application
-
----
-
-## Development Guide: Building Organize GUI Step-by-Step
+### Development Guide: Building Organize GUI Step-by-Step
 
 This guide outlines the conceptual steps involved in creating the `organize-gui` application.
 

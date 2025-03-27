@@ -27,17 +27,17 @@ from ui.dialogs.schedule_dialog import ScheduleDialog # Import the new ScheduleD
 
 class MainWindow:
     """Enhanced main application window class."""
-    
+
     def __init__(self, parent):
         """Initialize the main window."""
         self.parent = parent
-        
+
         # Configure the parent window
         self.parent.title("File Organization System")
         self.parent.geometry("1000x700")
         self.parent.minsize(800, 600)
         self.parent.protocol("WM_DELETE_WINDOW", self.on_close)
-        
+
         # Set application icon
         try:
             icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "icon.ico")
@@ -45,49 +45,51 @@ class MainWindow:
                 self.parent.iconbitmap(icon_path)
         except Exception:
             pass  # Ignore icon errors
-        
+
         # Initialize managers
         self.config_manager = ConfigManager()
-        self.organize_runner = OrganizeRunner()
-        
+        # Pass config_manager to OrganizeRunner if needed
+        self.organize_runner = OrganizeRunner(config_manager=self.config_manager)
+
         # Create the main menu
         self._create_menu()
-        
+
         # Create the main container
         self.main_container = ttk.Frame(self.parent)
         self.main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
+
         # Create the notebook (tabbed interface)
         self.notebook = ttk.Notebook(self.main_container)
         self.notebook.pack(fill=tk.BOTH, expand=True)
-        
+
         # Create tab panels
         self.config_panel = ConfigPanel(self.notebook, self.config_manager)
         self.rules_panel = RulesPanel(self.notebook)
-        self.preview_panel = PreviewPanel(self.notebook, self.organize_runner)
+        # Pass config_panel reference to preview_panel
+        self.preview_panel = PreviewPanel(self.notebook, self.organize_runner, self.config_panel)
         self.results_panel = ResultsPanel(self.notebook)
-        
+
         # Add tabs to the notebook
         self.notebook.add(self.config_panel, text="Configuration")
         self.notebook.add(self.rules_panel, text="Rules")
         self.notebook.add(self.preview_panel, text="Preview & Run")
         self.notebook.add(self.results_panel, text="Results")
-        
+
         # Create status bar
         self._create_status_bar()
-        
+
         # Set up event handlers
         self._setup_events()
-        
+
         # Initialize application state
         self._initialize_state()
-    
+
     def _create_menu(self):
         """Create the main application menu."""
         # Main menu bar
         self.menu_bar = tk.Menu(self.parent)
         self.parent.config(menu=self.menu_bar)
-        
+
         # File menu
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.file_menu.add_command(label="New Configuration", command=self.on_new_config)
@@ -97,7 +99,7 @@ class MainWindow:
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.on_close)
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
-        
+
         # Tools menu
         self.tools_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.tools_menu.add_command(label="Run Simulation", command=self.on_run_simulation)
@@ -108,7 +110,7 @@ class MainWindow:
         self.tools_menu.add_command(label="Find Duplicates", command=self.on_find_duplicates)
         self.tools_menu.add_command(label="Rename Photos with EXIF", command=self.on_rename_photos)
         self.menu_bar.add_cascade(label="Tools", menu=self.tools_menu)
-        
+
         # Presets menu
         self.presets_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.presets_menu.add_command(label="Load Default Organization", command=lambda: self._load_preset(preset_manager.get_default_organization_config, "Default Organization"))
@@ -123,136 +125,161 @@ class MainWindow:
         self.help_menu.add_command(label="Documentation", command=self.on_documentation)
         self.help_menu.add_command(label="About", command=self.on_about)
         self.menu_bar.add_cascade(label="Help", menu=self.help_menu)
-    
+
     def _create_status_bar(self):
         """Create the status bar at the bottom of the window."""
         self.status_frame = ttk.Frame(self.parent, relief=tk.SUNKEN, padding=(2, 2))
         self.status_frame.pack(fill=tk.X, side=tk.BOTTOM)
-        
+
         self.status_label = ttk.Label(self.status_frame, text="Ready")
         self.status_label.pack(side=tk.LEFT, padx=5)
-        
+
         # Add progress indicator for background operations
         self.progress_var = tk.IntVar(value=0)
         self.progress = ttk.Progressbar(
-            self.status_frame, 
-            orient=tk.HORIZONTAL, 
-            length=200, 
+            self.status_frame,
+            orient=tk.HORIZONTAL,
+            length=200,
             mode='determinate',
             variable=self.progress_var
         )
         self.progress.pack(side=tk.RIGHT, padx=5)
         self.progress.pack_forget()  # Hide initially
-    
+
     def _setup_events(self):
         """Set up event handlers for communication between panels."""
         # Listen for configuration change events
         self.parent.bind("<<ConfigurationChanged>>", self.on_config_changed)
-        
+
         # Listen for rule change events
         self.parent.bind("<<RulesChanged>>", self.on_rules_changed)
-        
+
         # Listen for process completion events
         self.parent.bind("<<ProcessComplete>>", self.on_process_complete)
-    
+
     def _initialize_state(self):
-        """Initialize the application state."""
-        # Try to find config file locations
-        config_paths = [
-            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "organize.yaml"),
-            os.path.expanduser("~/.config/organize-tool/config.yaml"),
-            os.path.expanduser("~/Library/Application Support/organize-tool/config.yaml"),
-            os.path.join(os.getenv("APPDATA", ""), "organize-tool", "config.yaml")
-        ]
-        
-        # Try to load default configuration using PresetManager
-        default_config = preset_manager.get_default_organization_config()
-        if default_config and default_config.get('rules'): # Check if rules exist
+        """Initialize the application state, prioritizing a specific config file."""
+        loaded_successfully = False
+        # Define the prioritized config file path relative to this file's location
+        # main_window.py is in organize_gui/ui/
+        # We want ../../organise_dirs/config/organize.yaml
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        prioritized_config_path = os.path.abspath(os.path.join(script_dir, '..', '..', '..', 'organise_dirs', 'config', 'organize.yaml'))
+
+        if os.path.exists(prioritized_config_path):
             try:
-                self.config_panel.update_config(default_config)
-                self.set_status("Loaded default organization configuration")
+                # Use the config_panel's load method which updates UI
+                if self.config_panel.load_configuration(prioritized_config_path):
+                    self.set_status(f"Loaded default config: {os.path.basename(prioritized_config_path)}")
+                    loaded_successfully = True
+                else:
+                    # load_configuration shows its own error message
+                    print(f"Attempted to load {prioritized_config_path} but failed.")
+            except Exception as e:
+                print(f"Error loading prioritized configuration '{prioritized_config_path}': {str(e)}")
+                messagebox.showerror("Config Load Error", f"Failed to load the default configuration file:\n{prioritized_config_path}\n\nError: {str(e)}")
+        else:
+            print(f"Prioritized config file not found: {prioritized_config_path}")
+
+        # Fallback if prioritized config wasn't loaded
+        if not loaded_successfully:
+            print("Falling back to preset or new configuration.")
+            # Try to load default configuration using PresetManager
+            try:
+                default_config = preset_manager.get_default_organization_config()
+                if default_config and default_config.get('rules'): # Check if rules exist
+                    self.config_panel.update_config(default_config) # Update panel with preset data
+                    self.set_status("Loaded default organization preset")
+                    loaded_successfully = True
+                else:
+                     print("Default preset was empty or invalid.")
             except Exception as e:
                 print(f"Error loading default configuration via preset manager: {str(e)}")
-                # Fallback to new config if loading default fails
-                self.on_new_config()
-        else:
-            # If no default config found or it's empty, create a new one
-            self.on_new_config()
-    
+
+        # Final fallback: create a new empty configuration
+        if not loaded_successfully:
+            print("Falling back to creating a new configuration.")
+            # Use the method that updates the UI
+            self.config_panel.new_configuration()
+            self.set_status("Created new configuration")
+
     def set_status(self, message, show_progress=False, progress_value=0):
         """Update the status bar with a message and optional progress."""
         self.status_label.config(text=message)
-        
+
         if show_progress:
             self.progress.pack(side=tk.RIGHT, padx=5)
             self.progress_var.set(progress_value)
         else:
             self.progress.pack_forget()
-        
+
         # Update UI
         self.parent.update_idletasks()
-    
+
     # Event handlers
-    
+
     def on_config_changed(self, event):
         """Handle configuration change events."""
         # Update the rules panel with the new configuration
         if hasattr(self, 'config_panel') and hasattr(self, 'rules_panel'):
-            config = self.config_panel.get_current_config()
+            # Get config potentially from editor if that's the source of truth
+            config = self.config_panel.get_current_config(from_editor=True)
             if config:
                 self.rules_panel.update_rules(config)
-    
+
     def on_rules_changed(self, event):
         """Handle rules change events."""
-        # Update config when rules are enabled/disabled
+        # Update config panel's editor when rules are enabled/disabled in RulesPanel
         config = self.rules_panel.get_updated_config()
         if config:
+            # Update the config panel (which includes the YAML editor)
             self.config_panel.update_config(config)
-    
+
     def on_process_complete(self, event):
         """Handle process completion events."""
-        # Update the results panel
+        # Update the results panel with data from preview_panel
+        results = self.preview_panel.get_results()
+        self.results_panel.set_results(results) # <--- Changed from update_results
         self.notebook.select(3)  # Switch to results tab
         self.set_status("Process completed", show_progress=False)
-    
+
     def on_new_config(self):
         """Create a new configuration."""
-        if messagebox.askyesno("New Configuration", 
+        if messagebox.askyesno("New Configuration",
                               "Are you sure you want to create a new configuration? Unsaved changes will be lost."):
-            self.config_panel.new_configuration()
+            self.config_panel.new_configuration() # This method handles UI and config_manager
             self.set_status("Created new configuration")
-    
+
     def on_open_config(self):
         """Open an existing configuration."""
         if self.config_panel.open_configuration_dialog():
-            self.set_status("Configuration loaded")
-    
+            self.set_status(f"Configuration loaded from {os.path.basename(self.config_panel.current_config_path)}")
+
     def on_save_config(self):
         """Save the current configuration."""
         if self.config_panel.save_configuration():
-            self.set_status("Configuration saved")
-    
+            self.set_status(f"Configuration saved to {os.path.basename(self.config_panel.current_config_path)}")
+
     def on_save_config_as(self):
         """Save the current configuration to a new file."""
         if self.config_panel.save_configuration_as():
-            self.set_status("Configuration saved to new file")
-    
+            self.set_status(f"Configuration saved to new file: {os.path.basename(self.config_panel.current_config_path)}")
+
     def on_run_simulation(self):
         """Run the organization in simulation mode."""
         # Switch to the preview tab
         self.notebook.select(2)  # Index 2 is the Preview & Run tab
         # Trigger simulation
         self.preview_panel.run_simulation()
-    
+
     def on_run_organization(self):
         """Run the actual organization process."""
-        if messagebox.askyesno("Run Organization", 
-                              "Are you sure you want to run the file organization process? Files will be moved according to the configuration."):
-            # Switch to the preview tab
-            self.notebook.select(2)  # Index 2 is the Preview & Run tab
-            # Trigger actual run
-            self.preview_panel.run_organization()
-    
+        # Confirmation is handled within preview_panel now
+        # Switch to the preview tab
+        self.notebook.select(2)  # Index 2 is the Preview & Run tab
+        # Trigger actual run
+        self.preview_panel.run_organization()
+
     def on_schedule_organization(self):
         """Open the scheduling dialog using the dedicated class."""
         # Get the path of the currently saved config file, if any
@@ -261,24 +288,24 @@ class MainWindow:
 
     def on_find_duplicates(self):
         """Create a configuration focused on finding duplicates."""
-        if messagebox.askyesno("Find Duplicates", 
+        if messagebox.askyesno("Find Duplicates",
                                "This will create a configuration focused on finding duplicate files. Continue?"):
             self._load_preset(preset_manager.get_find_duplicates_config, "Duplicate Finding")
-    
+
     def on_rename_photos(self):
         """Create a configuration focused on renaming photos with EXIF data."""
-        if messagebox.askyesno("Rename Photos", 
+        if messagebox.askyesno("Rename Photos",
                                "This will create a configuration focused on renaming photos using EXIF data. Continue?"):
             self._load_preset(preset_manager.get_rename_photos_config, "Photo Renaming")
-    
+
     def _load_preset(self, preset_func, preset_name):
         """Helper function to load a preset configuration."""
         if messagebox.askyesno(f"Load {preset_name} Preset",
-                              f"This will replace your current configuration with the {preset_name} preset. Continue?"):
+                              f"This will replace your current configuration with the {preset_name} preset. Unsaved changes will be lost. Continue?"):
             try:
                 config = preset_func()
                 if config and config.get('rules'):
-                    self.config_panel.update_config(config)
+                    self.config_panel.update_config(config) # Update panel with preset data
                     self.notebook.select(0)  # Switch to config tab
                     self.set_status(f"Loaded {preset_name} configuration preset")
                 else:
@@ -295,16 +322,17 @@ class MainWindow:
             subprocess.run(["organize", "docs"], check=False)
         except Exception:
             # Fallback to showing a message
-            messagebox.showinfo("Documentation", 
+            messagebox.showinfo("Documentation",
                                "Please refer to the organize-tool documentation:\n\n"
                                "https://organize.readthedocs.io/")
-    
+
     def on_about(self):
         """Show the about dialog using the dedicated class."""
         AboutDialog(self.parent) # Instantiate the dialog
 
     def on_close(self):
         """Handle window close event."""
-        # Check for unsaved changes
+        # TODO: Check for unsaved changes in the YAML editor
+        # if self.config_panel.has_unsaved_changes(): ...
         if messagebox.askyesno("Exit", "Are you sure you want to exit?"):
             self.parent.destroy()

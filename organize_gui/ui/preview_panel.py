@@ -14,18 +14,21 @@ import subprocess
 import tempfile
 import yaml
 import re
+import copy # Added for deep copy
 
 # Import the new panel
 from .output_log_panel import OutputLogPanel
+from core.config_manager import ConfigManager # Added for temporary manager
 
 class PreviewPanel(ttk.Frame):
     """Enhanced panel for previewing and running the organization process."""
 
-    def __init__(self, parent, organize_runner=None):
+    def __init__(self, parent, organize_runner=None, config_panel=None): # Added config_panel
         """Initialize the preview panel."""
         super().__init__(parent)
 
         self.organize_runner = organize_runner
+        self.config_panel = config_panel # Store config_panel reference
         self.is_running = False
         self.queue = queue.Queue()
         self.current_results = []
@@ -195,18 +198,47 @@ class PreviewPanel(ttk.Frame):
                 if not config_path_to_use or not os.path.exists(config_path_to_use):
                     raise ValueError("Custom config file path is invalid or file does not exist.")
 
+            config_data_to_use = None
+            if config_path_to_use is None:
+                # Get config from editor, update paths in a copy
+                if not self.config_panel:
+                    raise ValueError("ConfigPanel reference is missing.")
+
+                # Get paths from ConfigPanel UI
+                source_dirs = [entry['var'].get() for entry in self.config_panel.source_entries if entry['var'].get()]
+                dest_dir = self.config_panel.dest_var.get()
+                if not source_dirs: raise ValueError("Source directory is not set in Configuration tab.")
+                if not dest_dir: raise ValueError("Destination directory is not set in Configuration tab.")
+                # Use only the first source dir for updating, consistent with ConfigPanel._update_paths
+                source_dir_to_update = source_dirs[0]
+
+                # Get config dict from editor
+                config_dict = self._get_current_config()
+                if not config_dict: raise ValueError("Could not retrieve configuration.")
+
+                # Create a deep copy to avoid modifying the original
+                config_copy = copy.deepcopy(config_dict)
+
+                # Use a temporary ConfigManager to update the copy
+                temp_manager = ConfigManager()
+                temp_manager.config = config_copy # Load the copy
+                # Update paths in the copied config dict
+                temp_manager.update_paths(source_dir_to_update, dest_dir)
+                config_data_to_use = temp_manager.config # Use the modified dict
+
             if self.organize_runner:
                 # Use the provided runner (preferred)
                 result = self.organize_runner.run(
                     simulation=simulation,
                     progress_callback=self._thread_progress_callback,
                     output_callback=self._thread_output_callback,
-                    config_path=config_path_to_use,
+                    config_path=config_path_to_use, # Will be None if using config_data
+                    config_data=config_data_to_use, # Pass modified data
                     verbose=self.verbose_var.get()
                 )
                 self.queue.put({'type': 'complete', **result}) # Pass runner result directly
             else:
-                # Fallback to subprocess (less detailed feedback)
+                # Fallback to subprocess (less detailed feedback) - Needs adjustment for config_data
                 self._run_organize_command(simulation)
 
         except Exception as e:
@@ -266,39 +298,34 @@ class PreviewPanel(ttk.Frame):
 
 
     def _get_current_config(self):
-        """Get the current configuration from the parent application or custom path."""
-        # If using custom config, load it directly
+        """Get the current configuration dictionary, prioritizing the editor."""
+        # If using custom config file path, load it directly
         if self.use_custom_config_var.get():
             custom_path = self.custom_config_path_var.get()
             if custom_path and os.path.exists(custom_path):
                 try:
-                    with open(custom_path, 'r', encoding='utf-8') as f: return yaml.safe_load(f)
-                except Exception as load_err: raise ValueError(f"Error loading custom config '{custom_path}': {load_err}") from load_err
-            else: raise ValueError(f"Custom config file not found: {custom_path}")
+                    with open(custom_path, 'r', encoding='utf-8') as f:
+                        config = yaml.safe_load(f)
+                        if not config or not isinstance(config, dict) or 'rules' not in config:
+                             raise ValueError("Invalid YAML structure in custom file.")
+                        return config
+                except Exception as load_err:
+                    raise ValueError(f"Error loading custom config '{custom_path}': {load_err}") from load_err
+            else:
+                raise ValueError(f"Custom config file not found or path not set: {custom_path}")
 
-        # Otherwise, try to get from ConfigPanel via event (less direct)
-        # This part might need adjustment based on how main_window handles the event
-        try:
-            # Attempt to find ConfigPanel directly if within the same notebook
-            parent_notebook = self.nametowidget(self.winfo_parent())
-            if isinstance(parent_notebook, ttk.Notebook):
-                 for tab_id in parent_notebook.tabs():
-                     tab = parent_notebook.nametowidget(tab_id)
-                     if hasattr(tab, 'get_current_config') and "config" in str(tab).lower():
-                          return tab.get_current_config(from_editor=True) # Get from editor
-
-            # Fallback: Use config manager if available (might be slightly out of sync with editor)
-            if self.organize_runner and hasattr(self.organize_runner, 'config_manager') and self.organize_runner.config_manager:
-                 return self.organize_runner.config_manager.config
-
-            # Last resort: Ask main window (implementation dependent)
-            self.event_generate("<<RequestConfig>>")
-            print("Warning: Requesting config via event, might not be immediate.")
-            return None # Cannot guarantee immediate return via event
-
-        except Exception as e:
-            print(f"Error getting configuration: {e}")
-            return None
+        # Otherwise, get from the referenced ConfigPanel (prioritizing editor)
+        if self.config_panel:
+            try:
+                # get_current_config now returns the dict, prioritizing editor
+                config = self.config_panel.get_current_config(from_editor=True)
+                if not config or not isinstance(config, dict) or 'rules' not in config:
+                     raise ValueError("Invalid configuration obtained from ConfigPanel.")
+                return config
+            except Exception as e:
+                 raise ValueError(f"Error getting configuration from ConfigPanel: {e}") from e
+        else:
+            raise ValueError("ConfigPanel reference not available to retrieve configuration.")
 
 
     def _thread_progress_callback(self, value, status=None):

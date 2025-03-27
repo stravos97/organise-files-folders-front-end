@@ -162,9 +162,10 @@ class MainWindow:
         loaded_successfully = False
         # Define the prioritized config file path relative to this file's location
         # main_window.py is in organize_gui/ui/
-        # We want ../../organise_dirs/config/organize.yaml
+        # We want ../config/organize.yaml relative to this script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        prioritized_config_path = os.path.abspath(os.path.join(script_dir, '..', '..', '..', 'organise_dirs', 'config', 'organize.yaml'))
+        relative_config_path = os.path.join('..', 'config', 'organize.yaml') # Relative path from ui/ to config/
+        prioritized_config_path = os.path.abspath(os.path.join(script_dir, relative_config_path)) # Get absolute path for checks like os.path.exists
 
         print(f"Looking for prioritized config file at: {prioritized_config_path}")
         if os.path.exists(prioritized_config_path):

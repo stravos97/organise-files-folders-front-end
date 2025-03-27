@@ -48,6 +48,7 @@ Before installing, make sure you have:
     organize-gui
     ```
     Or use the script: `./run.sh`
+    *   *(Note: On first launch, or if no configuration is loaded, the application attempts to load a default configuration from `organize_gui/config/organize.yaml`.)*
 
 2.  **Configure your folders in the `Configuration` Tab:**
     *   Choose which folders to scan for files (Source).
@@ -242,8 +243,24 @@ The project follows a modular structure designed for separation of concerns:
 
 ```
 organize_gui/
+├── __init__.py             # Makes organize_gui a Python package
 ├── app.py                  # Main application entry point & Tkinter setup
+├── README.md               # This file
+├── run.bat                 # Windows launcher script
+├── run.sh                  # Linux/macOS launcher script
+├── setup.py                # Packaging script
+├── backups/                # Directory for configuration backups (if implemented)
+├── config/                 # Configuration files
+│   └── organize.yaml       # Default organize-tool configuration
+├── core/                   # Core application logic (non-UI)
+│   ├── __init__.py
+│   ├── config_manager.py   # Handles reading/writing/parsing the YAML config
+│   ├── duplicate_helpers.py# Helper functions for duplicate detection logic
+│   ├── organize_runner.py  # Manages executing organize-tool CLI commands
+│   ├── output_parser.py    # Parses output from organize-tool
+│   └── preset_manager.py   # Manages predefined rule configurations (presets)
 ├── ui/                     # User Interface components (Tkinter widgets)
+│   ├── __init__.py
 │   ├── main_window.py      # Main application window, holds the notebook/tabs
 │   ├── config_panel.py     # UI for setting source/destination paths, loading/saving config
 │   ├── rules_panel.py      # UI for viewing, enabling/disabling rules from the config
@@ -251,17 +268,17 @@ organize_gui/
 │   ├── results_panel.py    # UI for displaying results after an organization run
 │   ├── output_log_panel.py # Reusable panel for displaying text output/logs
 │   ├── rule_details_panel.py # Shows details of a selected rule
+│   ├── rule_editor_dialogs.py# Dialogs for creating/editing rules visually
 │   ├── yaml_editor_panel.py  # Allows direct editing of the YAML config
 │   ├── rule_list_manager.py # Helper class to manage the rule list display
 │   ├── results_tree_manager.py # Helper class to manage the results tree display
+│   ├── backups/            # UI related backups (if any)
 │   └── dialogs/              # Various popup dialogs (About, Schedule, etc.)
-├── core/                   # Core application logic (non-UI)
-│   ├── config_manager.py   # Handles reading, writing, and parsing the organize-tool YAML config
-│   ├── organize_runner.py  # Manages executing organize-tool CLI commands via subprocesses
-│   ├── output_parser.py    # Parses the stdout/stderr from organize-tool into structured data
-│   ├── preset_manager.py   # (If exists) Manages predefined rule configurations
-│   └── duplicate_helpers.py # (If exists) Specific logic for handling duplicates
+│       ├── __init__.py
+│       ├── about_dialog.py # About dialog window
+│       └── schedule_dialog.py# Scheduling dialog window
 └── utils/                  # Shared utility functions
+    ├── __init__.py
     ├── path_helpers.py     # Functions for manipulating file paths
     └── validators.py       # Functions for validating user input (e.g., paths)
 ```

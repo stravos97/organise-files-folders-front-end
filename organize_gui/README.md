@@ -100,6 +100,44 @@ This project uses the MIT License - see the LICENSE file for details (if one exi
 
 - [organize-tool](https://github.com/tfeldmann/organize) - The powerful organization engine that makes this possible.
 
+## Creating a Standalone Executable (using PyInstaller)
+
+You can bundle this application into a single executable file so that users don't need to install Python or dependencies. This is done using the `PyInstaller` tool.
+
+**1. Install PyInstaller:**
+
+   Make sure you are in your project's activated virtual environment (the one created by `run.sh` or `run.bat`, or one you manage manually). Then, install PyInstaller:
+
+   ```bash
+   pip install pyinstaller
+   ```
+
+**2. Run PyInstaller:**
+
+   Navigate to the `organize_gui` directory in your terminal (the directory containing `app.py`). Run the following command:
+
+   ```bash
+   # For Windows:
+   pyinstaller --onefile --windowed --name organize-gui app.py
+
+   # For macOS/Linux:
+   pyinstaller --onefile --windowed --name organize-gui app.py
+   ```
+
+   *   `--onefile`: Bundles everything into a single executable.
+   *   `--windowed`: Prevents a console window from opening when the GUI app runs. Use `--noconsole` if `--windowed` doesn't work on your system.
+   *   `--name organize-gui`: Sets the name of the output executable.
+   *   `app.py`: Your main application script.
+
+**3. Find the Executable:**
+
+   PyInstaller will create `build` and `dist` directories. Your standalone executable will be inside the `dist` directory (e.g., `dist/organize-gui.exe` on Windows, `dist/organize-gui` on macOS/Linux).
+
+**Important Notes:**
+
+*   **Platform Specific:** You typically need to run PyInstaller on the target operating system. Build on Windows to create a `.exe`, on macOS for a macOS app bundle, etc.
+*   **Troubleshooting:** If the executable fails to run, PyInstaller might have missed some hidden dependencies. You may need to consult the PyInstaller documentation and potentially modify the `.spec` file it generates to include missing modules (`--hidden-import`) or data files (`--add-data`).
+
 ---
 
 ## Advanced Details & Development

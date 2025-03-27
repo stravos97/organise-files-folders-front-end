@@ -26,7 +26,7 @@ Before installing, make sure you have:
 
 1. Get the code:
    ```bash
-   git clone https://github.com/yourusername/organize-gui.git
+   git clone https://github.com/stravos97/organise-files-folders-front-end.git
    cd organize-gui
    ```
 

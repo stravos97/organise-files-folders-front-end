@@ -53,6 +53,17 @@ def is_valid_yaml(content):
     Returns:
         bool: True if valid, False otherwise
     """
+    # Ensure input is a string
+    if not isinstance(content, str):
+        return False
+        
+    # Treat empty or whitespace-only strings as potentially valid
+    # by yaml.safe_load (parses as None), but maybe semantically invalid
+    # depending on use case. For basic validation, let safe_load decide.
+    # If empty/whitespace should be strictly invalid, add:
+    # if not content or content.isspace():
+    #     return False
+
     try:
         yaml.safe_load(content)
         return True

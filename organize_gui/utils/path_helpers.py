@@ -183,11 +183,14 @@ def open_directory(path):
         elif platform.system() == "Darwin":
             # macOS
             subprocess.run(['open', path])
-        else:
+        elif platform.system() == "Linux":
             # Linux
             subprocess.run(['xdg-open', path])
-        
-        return True
+        else:
+            # Unsupported platform for this action
+            return False
+            
+        return True # Return True only if an action was attempted
     except Exception:
         return False
 

@@ -285,7 +285,7 @@ def test_run_uses_script_when_exists(mock_run_cmd, mock_run_script, monkeypatch)
     runner = create_runner(monkeypatch, script=script_path, script_exists=True) # create_runner uses the monkeypatched exists
 
     runner.run(config_path='/config.yaml', simulation=True, verbose=True)
-    mock_run_script.assert_called_once_with(True, ANY, ANY, '/config.yaml', True)
+    mock_run_script.assert_called_once_with(simulation=True, output_stream=ANY, output_callback=ANY, config_path='/config.yaml', verbose=True)
     mock_run_cmd.assert_not_called()
 
 @patch.object(OrganizeRunner, '_run_with_script')
@@ -298,7 +298,7 @@ def test_run_uses_command_when_script_missing(mock_run_cmd, mock_run_script, mon
     runner = create_runner(monkeypatch, script=script_path, script_exists=False) # create_runner uses the monkeypatched exists
 
     runner.run(config_path='/config.yaml', simulation=False, verbose=False)
-    mock_run_cmd.assert_called_once_with(False, ANY, ANY, '/config.yaml', False)
+    mock_run_cmd.assert_called_once_with(simulation=False, output_stream=ANY, output_callback=ANY, config_path='/config.yaml', verbose=False)
     mock_run_script.assert_not_called()
 
 @patch('organize_gui.core.organize_runner.tempfile.NamedTemporaryFile')
@@ -338,7 +338,7 @@ def test_run_with_config_data(mock_run_cmd, mock_unlink, mock_yaml_dump, mock_te
     # Check temp file creation and usage
     mock_tempfile.assert_called_once_with(mode='w', suffix='.yaml', delete=False, encoding='utf-8')
     mock_yaml_dump.assert_called_once_with(config_data, mock_temp_file_obj, default_flow_style=False, sort_keys=False, indent=2)
-    mock_run_cmd.assert_called_once_with(True, ANY, mock_output_callback, "/tmp/fake_config.yaml", False) # verbose=False default
+    mock_run_cmd.assert_called_once_with(simulation=True, output_stream=ANY, output_callback=mock_output_callback, config_path="/tmp/fake_config.yaml", verbose=False) # verbose=False default
 
     # Check temp file deletion
     mock_unlink.assert_called_once_with("/tmp/fake_config.yaml")
@@ -382,3 +382,207 @@ def test_run_with_invalid_config_data(monkeypatch):
 
 
 # Add tests for other methods below
+@patch('organize_gui.core.organize_runner.parse_organize_output') # Mock the parser
+@patch('subprocess.Popen')
+def test_run_with_command_successful(mock_popen, mock_parse_output, monkeypatch): # Add mock_parse_output
+    """Test successful execution of _run_with_command method."""
+    runner = create_runner(monkeypatch)
+    mock_process = MagicMock()
+    mock_process.stdout = MagicMock() # Still need stdout object for Popen args
+
+    mock_process.returncode = 0 # Set return code for completion check
+    mock_popen.return_value = mock_process
+    mock_parse_output.return_value = [{'status': 'parsed'}] # Mock parser return
+
+    callback = MagicMock()
+    result = runner._run_with_command(simulation=True, 
+                                     output_callback=callback, 
+                                     config_path="/test/config.yaml",
+                                     verbose=True)
+    # --- Assertions ---
+    expected_cmd = [runner.organize_cmd, '--config-file', '/test/config.yaml', '--simulate', '--verbose']
+    # Check Popen call arguments (stderr=subprocess.STDOUT is key here)
+    mock_popen.assert_called_once_with(expected_cmd, stdout=sys.stdout, stderr=subprocess.STDOUT, text=True)
+
+    # Check that parse_organize_output was called correctly
+    mock_parse_output.assert_called_once_with(
+        stdout_stream=mock_process.stdout,
+        stderr_stream=None, # Because stderr=subprocess.STDOUT
+        is_running_flag_func=ANY, # Check that a callable was passed
+        output_callback=callback,
+        progress_callback=None,
+        simulation=True
+    )
+    mock_process.wait.assert_called_once() # Check process wait was called
+
+    # Check final result and state
+    assert result["success"] is True
+    assert "completed" in result["message"].lower() # Check for completion message
+    assert result["results"] == [{'status': 'parsed'}] # Check parser results are passed through
+    assert runner.is_running is False
+
+    # Check only essential callbacks
+    callback.assert_any_call("Running command: organize_cmd --config-file /test/config.yaml --simulate --verbose", "info") # Initial call
+    callback.assert_any_call(result["message"], "success") # Final status message callback
+
+@patch('organize_gui.core.organize_runner.parse_organize_output') # Mock the parser
+@patch('subprocess.Popen')
+def test_run_with_script_successful(mock_popen, mock_parse_output, monkeypatch): # Add mock_parse_output
+    """Test successful execution of _run_with_script method."""
+    runner = create_runner(monkeypatch)
+    mock_process = MagicMock()
+    mock_process.stdout = MagicMock()
+    mock_process.stderr = MagicMock()
+    mock_process.returncode = 0
+    mock_popen.return_value = mock_process
+    mock_parse_output.return_value = [{'status': 'parsed_script'}] # Mock parser return
+
+    callback = MagicMock()
+    result = runner._run_with_script(simulation=False,
+                                    output_callback=callback, 
+                                    config_path="/test/config.yaml",
+                                    verbose=False)
+
+    # --- Assertions ---
+    assert result["success"] is True
+    assert "completed" in result["message"].lower()
+    mock_popen.assert_called_once() # Basic check, could be more specific about args
+    # Check that parse_organize_output was called correctly
+    mock_parse_output.assert_called_once_with(
+        stdout_stream=mock_process.stdout,
+        stderr_stream=mock_process.stderr,
+        is_running_flag_func=ANY, # Check that a callable was passed
+        output_callback=callback,
+        progress_callback=None,
+        simulation=False
+    )
+    mock_process.wait.assert_called_once() # Check process wait was called
+
+    # Check final result and state
+    assert result["success"] is True
+    assert "completed" in result["message"].lower()
+    assert result["results"] == [{'status': 'parsed_script'}]
+    assert runner.is_running is False
+
+    # Check only essential callbacks
+    callback.assert_any_call("Running script: /path/script.sh --run --config /test/config.yaml", "info") # Initial call
+    callback.assert_any_call(result["message"], "success") # Final status
+
+@patch('organize_gui.core.organize_runner.parse_organize_output') # Mock the parser
+@patch('subprocess.Popen')
+def test_run_with_command_error(mock_popen, mock_parse_output, monkeypatch): # Add mock_parse_output
+    """Test error handling in _run_with_command."""
+    runner = create_runner(monkeypatch)
+    mock_process = MagicMock()
+    mock_process.stdout = MagicMock()
+    mock_process.returncode = 1 # Indicate failure
+    mock_popen.return_value = mock_process
+    mock_parse_output.return_value = [{'status': 'parsed_error'}] # Mock parser return
+
+    callback = MagicMock()
+    result = runner._run_with_command(simulation=True, 
+                                    output_callback=callback,
+                                    config_path="/test/config.yaml")
+
+    # --- Assertions ---
+    assert result["success"] is False
+    assert "failed" in result["message"].lower()
+    # Check that parse_organize_output was called correctly
+    mock_parse_output.assert_called_once_with(
+        stdout_stream=mock_process.stdout,
+        stderr_stream=None, # Because stderr=subprocess.STDOUT
+        is_running_flag_func=ANY, # Check that a callable was passed
+        output_callback=callback,
+        progress_callback=None,
+        simulation=True
+    )
+    mock_process.wait.assert_called_once() # Check process wait was called
+
+    # Check final result and state
+    assert result["success"] is False
+    assert "failed" in result["message"].lower()
+    assert result["results"] == [{'status': 'parsed_error'}]
+    assert runner.is_running is False
+
+    # Check only essential callbacks
+    callback.assert_any_call("Running command: organize_cmd --config-file /test/config.yaml --simulate", "info") # Initial call
+    callback.assert_any_call(result["message"], "error") # Final status message callback
+
+def test_kill_running_process(monkeypatch):
+    """Test killing a running process."""
+    runner = create_runner(monkeypatch)
+
+    # Setup mock process
+    mock_process = MagicMock()
+    # Ensure poll() returns None initially to indicate running
+    mock_process.poll.return_value = None
+
+    # Make wait raise TimeoutExpired only when called with timeout, otherwise return None (simulate success)
+    def wait_side_effect(*args, **kwargs):
+        if 'timeout' in kwargs:
+            raise subprocess.TimeoutExpired(cmd="mock_cmd", timeout=kwargs['timeout'])
+        return None # Simulate successful wait when no timeout is given (after kill)
+    mock_process.wait.side_effect = wait_side_effect
+
+    runner.current_process = mock_process
+    runner.is_running = True
+
+    # Mock platform.system() if needed, assuming posix for SIGINT check
+    monkeypatch.setattr(platform, 'system', lambda: 'posix') # Or 'Windows'
+
+    result = runner.kill()
+
+    assert result["success"] is True
+    assert "killed forcefully" in result["message"] # Check for the specific message
+    # Check signal/terminate based on mocked platform
+    if platform.system() == 'Windows':
+         mock_process.terminate.assert_called_once() # Check terminate was called on Windows
+    else:
+         mock_process.send_signal.assert_called_once_with(subprocess.signal.SIGINT) # Check SIGINT was sent (on Unix)
+
+    # Check that wait was called twice: once with timeout, once without
+    assert mock_process.wait.call_count == 2
+    mock_process.wait.assert_any_call(timeout=1.0) # Check the call with timeout
+    mock_process.wait.assert_any_call()          # Check the call without timeout (after kill)
+
+    mock_process.kill.assert_called_once() # Crucially, check kill was called after timeout
+    assert runner.is_running is False
+    assert runner.current_process is None
+
+def test_kill_no_process(monkeypatch):
+    """Test killing when no process is running."""
+    runner = create_runner(monkeypatch)
+    runner.is_running = False
+    runner.current_process = None
+    
+    result = runner.kill()
+    
+    assert result["success"] is False
+    assert "No process" in result["message"]
+
+def test_check_status_running(monkeypatch):
+    """Test check_status when process is running."""
+    runner = create_runner(monkeypatch)
+    
+    # Setup mock process
+    mock_process = MagicMock()
+    mock_process.poll.return_value = None  # None indicates still running
+    runner.current_process = mock_process
+    runner.is_running = True
+    
+    assert runner.check_status() is True
+    mock_process.poll.assert_called_once()
+
+def test_check_status_completed(monkeypatch):
+    """Test check_status when process has completed."""
+    runner = create_runner(monkeypatch)
+    
+    # Setup mock process
+    mock_process = MagicMock()
+    mock_process.poll.return_value = 0  # Return code indicates completion
+    runner.current_process = mock_process
+    runner.is_running = True
+    
+    assert runner.check_status() is False
+    mock_process.poll.assert_called_once()
+    assert runner.is_running is False

@@ -71,10 +71,16 @@ def parse_organize_output(stdout_stream, stderr_stream, is_running_flag_func, ou
 
         if output_callback: output_callback(line_strip, tag)
 
-    # Process any remaining stderr
-    stderr_output = "".join(stderr_stream) # Read all remaining stderr
-    if stderr_output.strip() and output_callback:
-        output_callback(f"STDERR:\n{stderr_output.strip()}", "error")
+    # Process any remaining stderr only if the stream exists
+    if stderr_stream:
+        try:
+            stderr_output = "".join(stderr_stream) # Read all remaining stderr
+            if stderr_output.strip() and output_callback:
+                output_callback(f"STDERR:\n{stderr_output.strip()}", "error")
+        except TypeError:
+             # Handle cases where stderr_stream might not be iterable as expected
+             if output_callback: output_callback("Warning: Could not process stderr stream.", "warning")
+
 
     # Final progress update (might be called again by caller, but good fallback)
     if progress_callback: progress_callback(100, "Parsing complete")

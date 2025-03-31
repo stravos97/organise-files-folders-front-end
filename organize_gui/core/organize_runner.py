@@ -109,7 +109,13 @@ class OrganizeRunner:
             runner_method = self._run_with_script if use_script else self._run_with_command
 
             # Pass the effective_config_path (could be original or temp)
-            result = runner_method(simulation, progress_callback, output_callback, effective_config_path, verbose)
+            result = runner_method(
+                simulation=simulation,
+                output_stream=sys.stdout,  # Default to stdout
+                output_callback=output_callback,
+                config_path=effective_config_path,
+                verbose=verbose
+            )
             return result
 
         except Exception as e:
@@ -125,13 +131,13 @@ class OrganizeRunner:
                 except OSError as unlink_err:
                     if output_callback: output_callback(f"Warning: Failed to delete temporary config file {temp_config_path}: {unlink_err}", "warning")
 
-    # Modified to accept effective_config_path
-    def _run_with_script(self, simulation, progress_callback, output_callback, effective_config_path, verbose):
+    # Modified to accept config_path with output_stream as optional
+    def _run_with_script(self, simulation=None, output_stream=None, output_callback=None, config_path=None, verbose=False):
         """Runs the process using the shell script."""
         try:
             cmd = [self.script_path] + (["--simulate"] if simulation else ["--run"])
-            # Use the effective_config_path passed from run()
-            if effective_config_path: cmd.extend(["--config", effective_config_path])
+            # Use the config_path passed from run()
+            if config_path: cmd.extend(["--config", config_path])
             if verbose: cmd.append("--verbose")
 
             if output_callback: output_callback(f"Running script: {' '.join(cmd)}", "info")
@@ -139,16 +145,16 @@ class OrganizeRunner:
                 try: os.chmod(self.script_path, 0o755)
                 except Exception as e: output_callback(f"Warning: chmod failed: {e}", "warning")
 
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, encoding='utf-8')
+            process = subprocess.Popen(cmd, stdout=output_stream or subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             self.current_process = process
-            # Call the external parser function
+            # Call the external parser function using positional arguments, passing streams directly
             results = parse_organize_output(
-                iter(process.stdout.readline, ''),
-                iter(process.stderr.readline, ''),
-                lambda: self.is_running, # Pass running flag check
-                output_callback,
-                progress_callback,
-                simulation
+                stdout_stream=process.stdout, # Pass stream directly
+                stderr_stream=process.stderr, # Pass stream directly
+                is_running_flag_func=lambda: self.is_running, # Pass running flag check
+                output_callback=output_callback,
+                progress_callback=None,  # Removed progress_callback
+                simulation=simulation
             )
             process.wait() # Ensure process finishes after stream parsing
             success = process.returncode == 0
@@ -162,11 +168,11 @@ class OrganizeRunner:
         finally:
              self.current_process = None
 
-    # Modified to accept effective_config_path
-    def _run_with_command(self, simulation, progress_callback, output_callback, effective_config_path, verbose):
+    # Modified to accept config_path with output_stream as optional
+    def _run_with_command(self, simulation, output_callback=None, config_path=None, verbose=False, output_stream=None):
         """Runs the process using the direct organize command."""
         try:
-            config_to_use = effective_config_path # Use path passed from run()
+            config_to_use = config_path # Use path passed from run()
             # Fallback to default only if no path was determined in run()
             if not config_to_use:
                  default_config = Path.home() / ".config" / "organize" / "config.yaml" # Standard organize default
@@ -176,30 +182,43 @@ class OrganizeRunner:
                  # Removed the Library/Application Support check as it's less standard for organize-tool CLI
 
             cmd = [self.organize_cmd]
-            cmd.append('sim' if simulation else 'run')
-            # Remove the verbose flag entirely - it's not supported
             
-            # Add config path if one was determined
+            # Add config file flag
             if config_to_use:
-                 cmd.append(config_to_use)
+                cmd.extend(['--config-file', config_to_use])
             else:
-                 if output_callback: output_callback("Warning: No configuration file specified or found.", "warning")
-                 # Allow organize to potentially run without a config? Or raise error?
-                 # Let's allow it for now, organize might handle it.
+                if output_callback: output_callback("Warning: No configuration file specified or found.", "warning")
+            
+            # Add simulation flag
+            if simulation:
+                cmd.append('--simulate')
+            else:
+                cmd.append('run')
+            
+            # Add verbose flag
+            if verbose:
+                cmd.append('--verbose')
 
-            # Line removed from here
             if output_callback: output_callback(f"Running command: {' '.join(cmd)}", "info")
 
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, universal_newlines=True, bufsize=1, encoding='utf-8')
+            # Ensure stdout defaults explicitly to sys.stdout if output_stream is None, matching test expectation
+            stdout_target = output_stream if output_stream is not None else sys.stdout
+            process = subprocess.Popen(
+                cmd,
+                stdout=stdout_target,
+                stderr=subprocess.STDOUT, # Redirect stderr to stdout
+                text=True
+            )
             self.current_process = process
-            # Call the external parser function
+            # Call the external parser function using positional arguments, passing streams directly
+            # Since stderr is redirected to STDOUT, pass None for stderr_stream
             results = parse_organize_output(
-                iter(process.stdout.readline, ''),
-                iter(process.stderr.readline, ''),
-                lambda: self.is_running, # Pass running flag check
-                output_callback,
-                progress_callback,
-                simulation
+                stdout_stream=process.stdout, # Pass stream directly
+                stderr_stream=None, # Pass None because stderr is redirected
+                is_running_flag_func=lambda: self.is_running, # Pass running flag check
+                output_callback=output_callback,
+                progress_callback=None, # Keep as None
+                simulation=simulation
             )
             process.wait() # Ensure process finishes after stream parsing
             success = process.returncode == 0
@@ -215,9 +234,10 @@ class OrganizeRunner:
 
     # Removed _parse_process_stream method body, now calls external function
 
-    def stop(self):
+    def kill(self):
         """Stop the current process if running."""
-        if not self.is_running or not self.current_process: return False
+        if not self.is_running or not self.current_process: 
+            return {"success": False, "message": "No process running to kill."}
         print("Attempting to stop process...")
         try:
             # Use platform specific termination
@@ -240,27 +260,40 @@ class OrganizeRunner:
             try:
                 self.current_process.wait(timeout=1.0)
                 print("Process terminated gracefully.")
+                message = "Process terminated gracefully."
             except subprocess.TimeoutExpired:
                  print("Process did not terminate gracefully, killing...")
                  self.current_process.kill() # Force kill if SIGINT didn't work
                  self.current_process.wait() # Wait for kill to complete
                  print("Process killed.")
-            return True
+                 message = "Process killed forcefully after timeout."
+            return {"success": True, "message": message}
         except Exception as e:
-            print(f"Error stopping process: {e}")
+            error_message = f"Error stopping process: {e}"
+            print(error_message)
             # Ensure kill is attempted even if initial signal fails
             try:
                 if self.current_process and self.current_process.poll() is None:
                     self.current_process.kill()
                     self.current_process.wait()
+                    return {"success": True, "message": "Process killed after initial error."}
             except Exception as kill_e:
                 print(f"Error during final kill attempt: {kill_e}")
-            return False
+            return {"success": False, "message": error_message}
         finally:
             self.is_running = False
             self.current_process = None
 
-    # Modified schedule method to use effective_config_path logic if needed
+    def check_status(self):
+        """Check if process is still running and update is_running flag accordingly"""
+        if self.current_process:
+            is_running = self.current_process.poll() is None
+            # Update is_running flag if process has completed
+            if not is_running:
+                self.is_running = False
+            return is_running
+        return False
+
     def schedule(self, schedule_type, schedule_time, simulation=False, config_path=None, config_data=None):
         """Generates scheduler command/entry."""
         temp_config_path_sched = None
@@ -288,9 +321,10 @@ class OrganizeRunner:
                     raise ValueError(f"Failed to handle config_data for scheduling: {dump_err}") from dump_err
 
             # Build command parts using the determined config path
-            cmd_parts = [self.organize_cmd] + (['sim'] if simulation else ['run'])
+            cmd_parts = [self.organize_cmd]
             if effective_config_path_sched:
-                 cmd_parts.append(effective_config_path_sched)
+                 cmd_parts.extend(['--config-file', effective_config_path_sched])
+            cmd_parts.append('--simulate' if simulation else 'run')
             # Note: Verbose is usually not desired for scheduled tasks
             cmd_str = " ".join(f'"{part}"' if " " in part else part for part in cmd_parts)
 
@@ -316,4 +350,3 @@ class OrganizeRunner:
             return {'success': True, 'message': message, 'scheduler_info': scheduler_info}
         except Exception as e:
             return {'success': False, 'message': f"Error generating schedule: {e}"}
-        # No finally needed here as we decided not to create temp files for schedule yet

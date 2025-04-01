@@ -205,5 +205,65 @@ def test_parse_output_stops_when_flag_is_false():
     # Progress might not reach 100 if stopped early
     assert mock_progress_callback.called
 
+def test_parse_copy_action():
+    """ Test parsing output for copy actions. """
+    stdout_lines = [
+        "Rule \"Copy Reports\"",
+        "✓ /path/to/report_v1.pdf",
+        "  Copying \"/path/to/report_v1.pdf\" to \"/dest/Reports/report_v1.pdf\"",
+    ]
+    mock_output_callback = Mock()
+    results = parse_organize_output(iter(stdout_lines), iter([]), lambda: True, mock_output_callback, None, simulation=False)
+    expected_results = [{'source': '/path/to/report_v1.pdf', 'destination': '/dest/Reports/report_v1.pdf', 'status': 'Copied', 'rule': 'Copy Reports'}]
+    assert results == expected_results
+    # Check callback tag (assuming 'copy' tag will be added)
+    actual_output_calls = [c for c in mock_output_callback.call_args_list if not c.args[0].startswith("Processing:")]
+    assert call("Copying \"/path/to/report_v1.pdf\" to \"/dest/Reports/report_v1.pdf\"", "copy") in actual_output_calls
+
+def test_parse_rename_action():
+    """ Test parsing output for rename actions. """
+    stdout_lines = [
+        "Rule \"Rename Images\"",
+        "✓ /path/to/IMG_001.jpg",
+        "  Renaming \"/path/to/IMG_001.jpg\" to \"/path/to/Vacation_001.jpg\"",
+    ]
+    mock_output_callback = Mock()
+    results = parse_organize_output(iter(stdout_lines), iter([]), lambda: True, mock_output_callback, None, simulation=False)
+    expected_results = [{'source': '/path/to/IMG_001.jpg', 'destination': '/path/to/Vacation_001.jpg', 'status': 'Renamed', 'rule': 'Rename Images'}]
+    assert results == expected_results
+    # Check callback tag (assuming 'rename' tag will be added)
+    actual_output_calls = [c for c in mock_output_callback.call_args_list if not c.args[0].startswith("Processing:")]
+    assert call("Renaming \"/path/to/IMG_001.jpg\" to \"/path/to/Vacation_001.jpg\"", "rename") in actual_output_calls
+
+def test_parse_delete_action():
+    """ Test parsing output for delete actions. """
+    stdout_lines = [
+        "Rule \"Delete Temp Files\"",
+        "✓ /path/to/old.tmp",
+        "  Deleting \"/path/to/old.tmp\"",
+    ]
+    mock_output_callback = Mock()
+    results = parse_organize_output(iter(stdout_lines), iter([]), lambda: True, mock_output_callback, None, simulation=False)
+    expected_results = [{'source': '/path/to/old.tmp', 'destination': None, 'status': 'Deleted', 'rule': 'Delete Temp Files'}]
+    assert results == expected_results
+     # Check callback tag (assuming 'delete' tag will be added)
+    actual_output_calls = [c for c in mock_output_callback.call_args_list if not c.args[0].startswith("Processing:")]
+    assert call("Deleting \"/path/to/old.tmp\"", "delete") in actual_output_calls
+
+def test_parse_skipped_status():
+    """ Test parsing output for skipped files. """
+    stdout_lines = [
+        "Rule \"Move Important\"",
+        "✓ /path/to/file.txt",
+        "  Skipped (conflict)", # Example skipped message
+    ]
+    mock_output_callback = Mock()
+    results = parse_organize_output(iter(stdout_lines), iter([]), lambda: True, mock_output_callback, None, simulation=False)
+    expected_results = [{'source': '/path/to/file.txt', 'destination': None, 'status': 'Skipped', 'rule': 'Move Important'}]
+    assert results == expected_results
+    # Check callback tag (assuming 'skipped' tag will be added)
+    actual_output_calls = [c for c in mock_output_callback.call_args_list if not c.args[0].startswith("Processing:")]
+    assert call("Skipped (conflict)", "skipped") in actual_output_calls
+
 
 # Finished testing output_parser.py

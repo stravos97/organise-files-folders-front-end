@@ -6,6 +6,15 @@ for common organization tasks.
 """
 
 import os
+import yaml # Added yaml import
+
+# Define possible paths at the module level for broader access (e.g., by tests)
+possible_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "organize.yaml"), # Project config dir
+    os.path.expanduser("~/.config/organize-tool/config.yaml"), # Linux/XDG config
+    os.path.expanduser("~/Library/Application Support/organize-tool/config.yaml"), # macOS config
+    os.path.join(os.getenv("APPDATA", ""), "organize-tool", "config.yaml") # Windows config
+]
 
 def get_find_duplicates_config():
     """Generate configuration for finding duplicate files."""
@@ -241,12 +250,7 @@ def get_default_organization_config():
     """
     # Try to find the default configuration file
     default_config_path = None
-    possible_paths = [
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "organize.yaml"),
-        os.path.expanduser("~/.config/organize-tool/config.yaml"),
-        os.path.expanduser("~/Library/Application Support/organize-tool/config.yaml"),
-        os.path.join(os.getenv("APPDATA", ""), "organize-tool", "config.yaml")
-    ]
+    # Use the module-level possible_paths list
     for path in possible_paths:
         if os.path.exists(path):
             default_config_path = path

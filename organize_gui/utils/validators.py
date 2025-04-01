@@ -205,14 +205,19 @@ def is_valid_action(action_obj):
     expected_types = action_types[action_type]
     if not any(isinstance(action_value, t) for t in expected_types):
         return False
-    
-    # Specific validation for move action
-    if action_type == 'move' and isinstance(action_value, dict):
-        if 'dest' not in action_value:
+
+    # Specific validation for move and copy actions (path validation)
+    if action_type in ('move', 'copy'):
+        dest_path = None
+        if isinstance(action_value, dict):
+            if 'dest' not in action_value:
+                return False # Missing 'dest' key
+            dest_path = action_value['dest']
+        elif isinstance(action_value, str):
+            dest_path = action_value
+
+        # Validate the extracted destination path
+        if not isinstance(dest_path, str) or not is_valid_path(dest_path):
             return False
-        
-        dest = action_value['dest']
-        if not isinstance(dest, str) or not is_valid_path(dest):
-            return False
-    
+
     return True

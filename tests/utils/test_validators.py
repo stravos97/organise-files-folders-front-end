@@ -227,6 +227,11 @@ def test_is_valid_filter(filter_obj, expected_result):
     ({"move": {"dest": ""}}, False), # Invalid dest path in move dict
     ({"move": {"dest": "/path/with/\0"}}, False), # Invalid dest path in move dict
     ({"move": {"on_conflict": "rename"}}, False), # Missing 'dest' in move dict
+    # Invalid cases - String value path validation
+    ({"move": "/path/with/\0"}, False), # Invalid path as string value for move
+    ({"copy": "/path/with/\0"}, False), # Invalid path as string value for copy
+    ({"move": ""}, False), # Empty string path for move
+    ({"copy": "  "}, False), # Whitespace string path for copy
 ])
 def test_is_valid_action(action_obj, expected_result):
     """

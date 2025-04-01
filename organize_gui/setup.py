@@ -15,6 +15,7 @@ setup(
     install_requires=[
         "pyyaml>=6.0",
         "organize-tool>=2.4.0",
+        "mutagen>=1.45.1",  # Added mutagen dependency
     ],
     entry_points={
         'console_scripts': [

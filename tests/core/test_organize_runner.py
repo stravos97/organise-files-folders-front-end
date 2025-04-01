@@ -508,6 +508,85 @@ def test_run_with_command_error(mock_popen, mock_parse_output, monkeypatch): # A
     callback.assert_any_call("Running command: organize_cmd --config-file /test/config.yaml --simulate", "info") # Initial call
     callback.assert_any_call(result["message"], "error") # Final status message callback
 
+@patch('organize_gui.core.organize_runner.parse_organize_output') # Mock the parser
+@patch('subprocess.Popen')
+def test_run_with_script_error(mock_popen, mock_parse_output, monkeypatch):
+    """Test error handling in _run_with_script."""
+    runner = create_runner(monkeypatch)
+    mock_process = MagicMock()
+    mock_process.stdout = MagicMock()
+    mock_process.stderr = MagicMock()
+    mock_process.returncode = 1 # Indicate failure
+    mock_popen.return_value = mock_process
+    mock_parse_output.return_value = [{'status': 'parsed_script_error'}] # Mock parser return
+
+    callback = MagicMock()
+    result = runner._run_with_script(simulation=False,
+                                    output_callback=callback,
+                                    config_path="/test/config.yaml")
+
+    # --- Assertions ---
+    assert result["success"] is False
+    assert "failed" in result["message"].lower()
+    mock_popen.assert_called_once()
+    # Check that parse_organize_output was called correctly
+    mock_parse_output.assert_called_once_with(
+        stdout_stream=mock_process.stdout,
+        stderr_stream=mock_process.stderr,
+        is_running_flag_func=ANY,
+        output_callback=callback,
+        progress_callback=None,
+        simulation=False
+    )
+    mock_process.wait.assert_called_once()
+
+    # Check final result and state
+    assert result["success"] is False
+    assert "failed" in result["message"].lower()
+    assert result["results"] == [{'status': 'parsed_script_error'}]
+    assert runner.is_running is False
+
+    # Check only essential callbacks
+    callback.assert_any_call("Running script: /path/script.sh --run --config /test/config.yaml", "info") # Initial call
+    callback.assert_any_call(result["message"], "error") # Final status
+
+@patch('subprocess.Popen', side_effect=FileNotFoundError("Command not found"))
+def test_run_with_command_popen_exception(mock_popen, monkeypatch):
+    """Test Popen exception handling in _run_with_command."""
+    runner = create_runner(monkeypatch)
+    callback = MagicMock()
+    result = runner._run_with_command(simulation=True,
+                                    output_callback=callback,
+                                    config_path="/test/config.yaml")
+
+    assert result["success"] is False
+    # Check for the actual error message format
+    assert "Command error: Command not found" in result["message"]
+    assert "Command not found" in result["message"] # Include original error
+    assert runner.is_running is False
+    assert runner.current_process is None
+    # Check the message actually sent to the callback
+    callback.assert_any_call(f"Error with command: {FileNotFoundError('Command not found')}", "error")
+
+@patch('subprocess.Popen', side_effect=PermissionError("Permission denied"))
+def test_run_with_script_popen_exception(mock_popen, monkeypatch):
+    """Test Popen exception handling in _run_with_script."""
+    runner = create_runner(monkeypatch)
+    callback = MagicMock()
+    result = runner._run_with_script(simulation=False,
+                                    output_callback=callback,
+                                    config_path="/test/config.yaml")
+
+    assert result["success"] is False
+    # Check for the actual error message format
+    assert "Script error: Permission denied" in result["message"]
+    assert "Permission denied" in result["message"] # Include original error
+    assert runner.is_running is False
+    assert runner.current_process is None
+    # Check the message actually sent to the callback
+    callback.assert_any_call(f"Error with script: {PermissionError('Permission denied')}", "error")
+
+
 def test_kill_running_process(monkeypatch):
     """Test killing a running process."""
     runner = create_runner(monkeypatch)

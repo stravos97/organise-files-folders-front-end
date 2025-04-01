@@ -112,6 +112,10 @@ class RuleListManager:
         for filter_item in filters:
             if isinstance(filter_item, dict) and 'extension' in filter_item:
                 extensions = filter_item['extension']
+                # Handle both single string and list of extensions
+                if isinstance(extensions, str):
+                    extensions = [extensions] # Convert single string to list
+
                 if isinstance(extensions, list):
                     ext_set = {ext.lower().strip('.') for ext in extensions}
                     doc_exts = {'txt', 'pdf', 'doc', 'docx', 'rtf', 'odt', 'pages', 'key', 'ppt', 'pptx', 'xls', 'xlsx'}

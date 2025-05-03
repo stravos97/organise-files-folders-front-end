@@ -3,7 +3,7 @@ rules:
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -29,13 +29,13 @@ rules:
     - desc
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Documents/Text/
+      dest: ~/Documents/Organized/Documents/Text/
       on_conflict: rename_new
 - name: Process All Photos - Move As-Is
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -75,13 +75,13 @@ rules:
   actions:
   - echo: 'Moving photo as-is: {path}'
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Images/Photos/
+      dest: ~/Documents/Organized/Media/Images/Photos/
       on_conflict: rename_new
 - name: Organize Vector Images
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -94,13 +94,13 @@ rules:
     - cdr
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Images/Vector/
+      dest: ~/Documents/Organized/Media/Images/Vector/
       on_conflict: rename_new
 - name: Organize Raw Camera Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -112,13 +112,13 @@ rules:
     - raw
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Images/Raw/
+      dest: ~/Documents/Organized/Media/Images/Raw/
       on_conflict: rename_new
 - name: Organize Adobe Image Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -130,13 +130,13 @@ rules:
     - xmp
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Images/Adobe/
+      dest: ~/Documents/Organized/Media/Images/Adobe/
       on_conflict: rename_new
 - name: Organize Audio Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -165,13 +165,13 @@ rules:
     - caf
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Audio/
+      dest: ~/Documents/Organized/Media/Audio/
       on_conflict: rename_new
 - name: Organize Audio Playlists
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -184,13 +184,13 @@ rules:
     - lrc
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Audio/
+      dest: ~/Documents/Organized/Media/Audio/
       on_conflict: rename_new
 - name: Organize Video Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -225,13 +225,13 @@ rules:
     - clpi
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Media/Video/
+      dest: ~/Documents/Organized/Media/Video/
       on_conflict: rename_new
 - name: Organize Web Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -271,13 +271,13 @@ rules:
     - toml
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Development/Web/
+      dest: ~/Documents/Organized/Development/Web/
       on_conflict: rename_new
 - name: Organize Code Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -332,13 +332,13 @@ rules:
     - php
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Development/Code/
+      dest: ~/Documents/Organized/Development/Code/
       on_conflict: rename_new
 - name: Organize Database Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -360,13 +360,13 @@ rules:
     - changedb
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Development/Data/
+      dest: ~/Documents/Organized/Development/Data/
       on_conflict: rename_new
 - name: Organize Archive Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -403,13 +403,13 @@ rules:
     - squashfs
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Archives/
+      dest: ~/Documents/Organized/Archives/
       on_conflict: rename_new
 - name: Organize Split Archive Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -465,13 +465,13 @@ rules:
     - r48
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Archives/
+      dest: ~/Documents/Organized/Archives/
       on_conflict: rename_new
 - name: Organize Font Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -489,13 +489,13 @@ rules:
     - ttc
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Fonts/
+      dest: ~/Documents/Organized/Fonts/
       on_conflict: rename_new
 - name: Organize Executable Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -536,13 +536,13 @@ rules:
     - snap
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Applications/
+      dest: ~/Documents/Organized/Applications/
       on_conflict: rename_new
 - name: Organize Configuration Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -571,13 +571,13 @@ rules:
     - settings
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/System/Config/
+      dest: ~/Documents/Organized/System/Config/
       on_conflict: rename_new
 - name: Identify Log Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -597,13 +597,13 @@ rules:
     - log-20220103230210
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new
 - name: Identify Temporary Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -633,13 +633,13 @@ rules:
     - modified
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new
 - name: Identify Error Reports
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -650,13 +650,13 @@ rules:
     - hdmp
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new
 - name: Identify System Data Files
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -729,13 +729,13 @@ rules:
     - version
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new
 - name: Handle Music File Duplicates
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -802,13 +802,13 @@ rules:
   actions:
   - echo: 'Found music duplicate: {path} (Original: {duplicate.original}) - Keeping original based on metadata score.'
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Cleanup/Duplicates/Music/{path.stem}_duplicate_{duplicate.count}.{extension}
+      dest: ~/Documents/Cleanup/Duplicates/Music/{path.stem}_duplicate_{duplicate.count}.{extension}
       on_conflict: rename_new
 - name: Handle Image Duplicates
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -833,13 +833,13 @@ rules:
   actions:
   - echo: 'Found image duplicate: {path} (Original: {duplicate.original})'
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Cleanup/Duplicates/Images/{path.stem}_duplicate_{duplicate.count}.{extension}
+      dest: ~/Documents/Cleanup/Duplicates/Images/{path.stem}_duplicate_{duplicate.count}.{extension}
       on_conflict: rename_new
 - name: Handle Video Duplicates
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -861,13 +861,13 @@ rules:
   actions:
   - echo: 'Found video duplicate: {path} (Original: {duplicate.original})'
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Cleanup/Duplicates/Videos/{path.stem}_duplicate_{duplicate.count}.{extension}
+      dest: ~/Documents/Cleanup/Duplicates/Videos/{path.stem}_duplicate_{duplicate.count}.{extension}
       on_conflict: rename_new
 - name: Find Duplicate Files (General)
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -916,26 +916,26 @@ rules:
   actions:
   - echo: 'Found general duplicate: {path} (Original: {duplicate.original})'
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Cleanup/Duplicates/Other/{path.stem}_duplicate_{duplicate.count}.{extension}
+      dest: ~/Documents/Cleanup/Duplicates/Other/{path.stem}_duplicate_{duplicate.count}.{extension}
       on_conflict: rename_new
 - name: Handle Files With No Extension
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
   - extension: ''
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new
 - name: Handle Unusual File Extensions
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -943,13 +943,13 @@ rules:
       expr: (?i).*\.(0|1|05|67|83|9|90|94|97|ii|ii1999|w|d|v2|small|sir|resp|rem|pd4|pd5|pat|stb|sab|qtp|pip|plf|qtch|zdct|zfsendtotarget|005|006|007|008|009|010|011|012|013|014|015|016|017|123|13|2|20050815|4|_p|biology|busadminmgmt|college|accounting|accurip|adminarchive|content|desklink|dist|engineering05|microsoft\[1\]|submitted|ii|ii1999|w|d|v2)$
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new
 - name: Handle URL Fragments
   enabled: true
   targets: files
   locations:
-  - path: /Volumes/Stuff
+  - path: ~/Downloads/
   subfolders: true
   filter_mode: all
   filters:
@@ -957,5 +957,5 @@ rules:
       expr: (?i).*\.(com%252fq%252f|0%7c970%7c2861182%7c0%7c225%7c|com%252fq%252fhow_many_grams_in_250_ml_water|com%252fq%252fhow_many_ml_equals_250_grams|0%7c970%7c2861182%7c0%7c225%7cadid=5552566;bnid=1;ct=766894980;st=361;adcid=1;itime=441528952;reqtype=5|0%7c970%7c2861182%7c0%7c225%7cadtech;cfp=1;rndc=128544152;target=_blank;misc=\[1475533290\];adiframe=y;rdclick=).*$
   actions:
   - move:
-      dest: /Volumes/Multimedia/Stuff2/Organized/Other/
+      dest: ~/Documents/Organized/Other/
       on_conflict: rename_new

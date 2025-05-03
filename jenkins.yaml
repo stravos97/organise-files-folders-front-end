@@ -1,0 +1,152 @@
+jenkins:
+  systemMessage: "Jenkins configured automatically for Organize GUI Project (Gitea)"
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          # !! IMPORTANT: Store ADMIN_PASSWORD securely (e.g., environment variable, secrets management)
+          #    Do not commit the actual password here.
+          password: "${ADMIN_PASSWORD}" # Placeholder - Inject securely
+
+  # !! SECURITY RECOMMENDATION: Replace with a more granular strategy like roleBased or matrix.
+  # authorizationStrategy:
+  #   loggedInUsersCanDoAnything:
+  #     allowAnonymousRead: false
+  authorizationStrategy:
+    roleBased: # Example using Role Strategy Plugin (Requires plugin installation)
+      roles:
+        global:
+          - name: "admin"
+            permissions:
+              - "Overall/Administer"
+            assignments:
+              - "admin"
+          - name: "developer"
+            permissions:
+              - "Overall/Read"
+              - "Job/Read"
+              - "Job/Build"
+              - "Job/Configure" # Adjust permissions as needed
+              - "Job/Workspace"
+            assignments:
+              # - "authenticated" # Or assign specific users/groups
+              - "admin" # Granting admin dev rights for now, adjust as needed
+        items:
+          - name: "job-reader"
+            pattern: ".*" # Apply to all jobs
+            permissions:
+              - "Job/Read"
+            assignments:
+              - "anonymous" # Example: Allow anonymous read access to jobs
+
+  nodes:
+    # Define the single Linux build agent
+    - permanent:
+        name: "linux-builder" # Updated node name
+        labelString: "linux-builder" # Updated label
+        remoteFS: "/home/jenkins/workspace" # Adjust if needed
+        launcher:
+          ssh:
+            # !! IMPORTANT: Ensure LINUX_AGENT_HOST is resolvable and SSH access is configured.
+            host: "${LINUX_AGENT_HOST}" # Placeholder - Inject securely
+            port: 22
+            credentialsId: "jenkins-ssh-key" # Defined below
+            launchTimeoutSeconds: 120
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          # SSH Key for connecting to agents
+          - basicSSHUserPrivateKey:
+              scope: SYSTEM
+              id: "jenkins-ssh-key"
+              username: "jenkins"
+              description: "SSH key for Jenkins to connect to build agents"
+              # !! SECURITY RECOMMENDATION: Avoid directEntry for private keys.
+              #    Prefer 'fileOnMaster' or secrets management integration.
+              # privateKeySource:
+              #   directEntry:
+              #     privateKey: "${SSH_PRIVATE_KEY}" # Placeholder - Inject securely
+              privateKeySource:
+                fileOnMaster:
+                  privateKeyFile: "/path/on/jenkins/controller/.ssh/id_rsa_jenkins_agent" # Example path
+                  # Ensure this file exists on the controller with correct permissions.
+
+          # Gitea Credentials (Secret Text/Token)
+          - secretText:
+              scope: GLOBAL
+              id: "gitea-credentials" # Used in the pipeline job SCM
+              description: "Gitea Access Token for repository access"
+              # !! IMPORTANT: Store GITEA_TOKEN securely (e.g., Jenkins env var, secrets management)
+              secret: "${GITEA_TOKEN}" # Placeholder - Inject securely
+
+          # PyPI Token
+          - string:
+              scope: GLOBAL
+              id: "pypi-token"
+              description: "PyPI token for package publishing"
+              # !! IMPORTANT: Store PYPI_TOKEN securely.
+              secret: "${PYPI_TOKEN}" # Placeholder - Inject securely
+
+          # Slack Token removed
+
+# Tool definitions are likely redundant as the Jenkinsfile uses virtual environments.
+# If specific Python versions MUST be managed by Jenkins itself, configure them here
+# carefully considering paths on different OS agents or use the Custom Tools Plugin.
+# tool:
+#   python:
+#     installations:
+#       - name: "python3.9" # Example
+#         # home: "/path/to/python3.9" # Platform-specific or tool installer
+
+jobs:
+  - script: >
+      pipelineJob('organize-gui') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  // Updated to Gitea URL
+                  url('http://192.168.1.55:3000/haashim/organise-files-folders-front-end.git')
+                  // Uses the 'gitea-credentials' defined above
+                  credentialsId('gitea-credentials')
+                }
+                branch('*/main') // Or your default branch
+              }
+            }
+            scriptPath('Jenkinsfile') // Points to the Jenkinsfile in the repo root
+          }
+        }
+        // !! RECOMMENDATION: Replace polling with webhooks for efficiency.
+        // triggers {
+        //   scm('H/15 * * * *') // Polls every 15 minutes
+        // }
+        triggers {
+           // Use Gitea push trigger (Requires Gitea Plugin)
+           giteaPush()
+        }
+        properties {
+          // Removed githubProjectProperty, add Gitea equivalent if plugin provides one
+          // Example: Discard old builds
+          buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
+        }
+      }
+
+unclassified:
+  # Global shared libraries are removed as they weren't used in the Jenkinsfile.
+  # If needed, add the definition back here.
+
+  location:
+    # Updated to your Jenkins URL
+    url: "http://192.168.1.56:8080"
+    adminAddress: "jenkins-admin@example.com" # Update with a real admin email
+
+  # Slack Notifier configuration removed
+
+security:
+  # !! SECURITY FIX: Enable script security for Job DSL. Approvals managed via UI.
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: true

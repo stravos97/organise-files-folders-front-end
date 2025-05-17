@@ -257,7 +257,7 @@ class PreviewPanel(ttk.Frame):
                 yaml.dump(config, temp_file, default_flow_style=False, sort_keys=False, indent=2)
 
             try:
-                cmd = ['organize'] + (['sim'] if simulation else ['run']) + [temp_path]
+                cmd = ['organize', '--config-file', temp_path] + (['--simulate'] if simulation else ['run'])
                 if self.verbose_var.get(): cmd.append('--verbose')
                 self.queue.put({'type': 'output', 'text': f"Running command: {' '.join(cmd)}", 'tag': 'info'})
 

@@ -137,15 +137,15 @@ class OrganizeRunner:
         try:
             cmd = [self.script_path] + (["--simulate"] if simulation else ["--run"])
             # Use the config_path passed from run()
-            if config_path: cmd.extend(["--config", config_path])
-            if verbose: cmd.append("--verbose")
+            if config_path: cmd.extend(["--config-file", config_path])
+            # if verbose: cmd.append("--verbose") # Removed as organize run/sim does not support --verbose
 
             if output_callback: output_callback(f"Running script: {' '.join(cmd)}", "info")
             if os.name != "nt":
                 try: os.chmod(self.script_path, 0o755)
                 except Exception as e: output_callback(f"Warning: chmod failed: {e}", "warning")
 
-            process = subprocess.Popen(cmd, stdout=output_stream or subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             self.current_process = process
             # Call the external parser function using positional arguments, passing streams directly
             results = parse_organize_output(
@@ -183,38 +183,34 @@ class OrganizeRunner:
 
             cmd = [self.organize_cmd]
             
-            # Add config file flag
-            if config_to_use:
-                cmd.extend(['--config-file', config_to_use])
-            else:
-                if output_callback: output_callback("Warning: No configuration file specified or found.", "warning")
-            
-            # Add simulation flag
+            # Add subcommand first (sim or run)
             if simulation:
-                cmd.append('--simulate')
+                cmd.append('sim')
             else:
                 cmd.append('run')
             
-            # Add verbose flag
-            if verbose:
-                cmd.append('--verbose')
+            # Add config file as positional argument
+            if config_to_use:
+                cmd.append(config_to_use)
+            else:
+                # If no config_to_use, 'organize run' might expect --stdin or show help.
+                # The original code didn't explicitly handle the case where config_to_use is None
+                # and the command still proceeds. This might be okay if 'organize' handles it.
+                if output_callback: output_callback("Warning: No configuration file specified or found. 'organize' might use default or expect --stdin.", "warning")
 
             if output_callback: output_callback(f"Running command: {' '.join(cmd)}", "info")
 
-            # Ensure stdout defaults explicitly to sys.stdout if output_stream is None, matching test expectation
-            stdout_target = output_stream if output_stream is not None else sys.stdout
             process = subprocess.Popen(
                 cmd,
-                stdout=stdout_target,
-                stderr=subprocess.STDOUT, # Redirect stderr to stdout
+                stdout=subprocess.PIPE, # Always use PIPE for stdout to allow parsing
+                stderr=subprocess.PIPE, # Use PIPE for stderr as well, to be parsed separately
                 text=True
             )
             self.current_process = process
             # Call the external parser function using positional arguments, passing streams directly
-            # Since stderr is redirected to STDOUT, pass None for stderr_stream
             results = parse_organize_output(
-                stdout_stream=process.stdout, # Pass stream directly
-                stderr_stream=None, # Pass None because stderr is redirected
+                stdout_stream=process.stdout, 
+                stderr_stream=process.stderr, # Pass the actual stderr stream
                 is_running_flag_func=lambda: self.is_running, # Pass running flag check
                 output_callback=output_callback,
                 progress_callback=None, # Keep as None
@@ -322,9 +318,10 @@ class OrganizeRunner:
 
             # Build command parts using the determined config path
             cmd_parts = [self.organize_cmd]
+            # Add subcommand first (sim or run)
+            cmd_parts.append('sim' if simulation else 'run')
             if effective_config_path_sched:
-                 cmd_parts.extend(['--config-file', effective_config_path_sched])
-            cmd_parts.append('--simulate' if simulation else 'run')
+                 cmd_parts.append(effective_config_path_sched)
             # Note: Verbose is usually not desired for scheduled tasks
             cmd_str = " ".join(f'"{part}"' if " " in part else part for part in cmd_parts)
 
